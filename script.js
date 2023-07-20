@@ -1,5 +1,5 @@
 import { Move as controls } from './controls.js';
-import { gameOver } from './ui.js';
+import { gameOver, restartGame, startGame, startBtn } from './ui.js';
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = document.documentElement.clientWidth;
@@ -9,7 +9,7 @@ const fps = 30;
 const interval = 1000 / fps;
 let lastTime = 0;
 let requestAnimationFrameRef;
-class Particle {
+class Ball {
     constructor(effect) {
         this.effect = effect;
         this.radius = 8;
@@ -37,8 +37,6 @@ class Particle {
             this.doubleBounce = true;
             platform.shake.shake = 1;
         }
-        this.x += this.vx;
-        this.y += this.vy;
         if ((this.x + this.radius) > this.effect.width || (this.x - this.radius) < 0) {
             this.x = this.x;
             this.vx *= -1;
@@ -51,8 +49,10 @@ class Particle {
         }
         if ((this.y + this.radius) > this.effect.height + 18) {
             cancelAnimationFrame(requestAnimationFrameRef);
-            gameOver.classList.toggle('activate');
+            gameOver.classList.add('activate');
         }
+        this.x += this.vx;
+        this.y += this.vy;
     }
     handleMouseMove() {
     }
@@ -62,52 +62,33 @@ class Effect {
         this.canvas = canvas;
         this.width = this.canvas.width;
         this.height = this.canvas.height;
-        this.particles = [];
-        this.numberOfParticles = 1;
+        this.ball = new Ball(this);
         this.tiles = [];
         this.platform = new Platform(this.canvas, 80, 10, 1, 1, 'hsl(215,100%,50%)');
-        this.noOfTiles = Math.floor(this.width / (Tile.width));
-        this.tileAdjustment = 0;
+        this.noOfTilesPerRow = Math.floor(this.width / (Tile.width));
+        this.noOfRows = 3;
+        this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width) * 0.5;
+        this.inactiveTiles = 0;
         this.createParticle();
     }
     createParticle() {
-        for (let index = 0; index < this.numberOfParticles; index++) {
-            this.particles.push(new Particle(this));
-        }
-        for (let i = 1; i < 4; i++) {
-            for (let j = 0; j < this.noOfTiles; j++) {
+        for (let i = 1; i <= this.noOfRows; i++) {
+            for (let j = 0; j < this.noOfTilesPerRow; j++) {
                 this.tiles.push(new Tile(Tile.width * j + this.tileAdjustment, Tile.height * i));
             }
         }
     }
     handleParticles(context) {
-        this.particles.forEach(particle => {
-            particle.draw(context);
-            particle.update(this.platform);
-        });
-        this.platform.draw(context);
         this.tiles.forEach(tile => {
             tile.draw(context);
+            this.inactiveTiles += tile.deactivateBall(this.ball);
         });
-    }
-    connectParticles(context) {
-        const maxDistance = 100;
-        for (let a = 0; a < this.particles.length; a++) {
-            for (let b = a; b < this.particles.length; b++) {
-                const dx = this.particles[a].x - this.particles[b].x;
-                const dy = this.particles[a].y - this.particles[b].y;
-                const distance = Math.hypot(dx, dy);
-                if (distance < maxDistance) {
-                    context.save();
-                    const opacity = 1 - distance / maxDistance;
-                    context.globalAlpha = opacity;
-                    context.beginPath();
-                    context.moveTo(this.particles[a].x, this.particles[a].y);
-                    context.lineTo(this.particles[b].x, this.particles[b].y);
-                    context.stroke();
-                    context.restore();
-                }
-            }
+        this.ball.draw(context);
+        this.ball.update(this.platform);
+        this.platform.draw(context);
+        if (this.inactiveTiles === this.noOfTilesPerRow * this.noOfRows) {
+            restartGame.classList.add('activate');
+            cancelAnimationFrame(requestAnimationFrameRef);
         }
     }
 }
@@ -138,12 +119,21 @@ class Tile {
         this.x = x;
         this.y = y;
         this.color = 'hsl(100,100%,50%)';
+        this.deactivate = false;
     }
     draw(context) {
         context.fillStyle = this.color;
         context.fillRect(this.x, this.y, Tile.width - Tile.gap, Tile.height - Tile.gap);
     }
-    changeColor(context) {
+    deactivateBall(ball) {
+        if (!this.deactivate && this.x < ball.x + ball.radius && this.x + Tile.width - Tile.gap > ball.x && this.y + Tile.height - Tile.gap > ball.y + ball.radius) {
+            this.deactivate = true;
+            this.color = 'hsl(100,100%,0%)';
+            this.deactivate = true;
+            return 1;
+        }
+        else
+            return 0;
     }
 }
 Tile.width = 40;
@@ -179,4 +169,7 @@ function animation(timestamp) {
         lastTime = timestamp;
     }
 }
-animation(0);
+startBtn.addEventListener('click', () => {
+    startGame.classList.remove('activate');
+    animation(0);
+});

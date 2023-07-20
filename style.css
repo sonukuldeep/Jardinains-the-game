@@ -4,6 +4,12 @@
     box-sizing: border-box;
 }
 
+body {
+    text-align: center;
+    font-family: sans-serif;
+    color:cadetblue;
+}
+
 canvas {
     background-color: black;
     top: 0;
@@ -11,7 +17,7 @@ canvas {
     position: absolute;
 }
 
-#gameover {
+#gameover, #restart, #start {
     display: none;
     position: absolute;
     left: 50%;
@@ -22,11 +28,13 @@ canvas {
     border-radius: 4px;
 }
 
-#restart-btn {
-    padding: 5px 10px;
+.restart-btn {
+    padding: 5px 14px;
+    color:cadetblue;
+    font-size: large;
 }
 
-#gameover.activate {
+#gameover.activate, #restart.activate, #start.activate {
     display: flex;
     flex-direction: column;
     gap: 20px;
