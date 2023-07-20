@@ -1,0 +1,34 @@
+* {
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+canvas {
+    background-color: black;
+    top: 0;
+    left: 0;
+    position: absolute;
+}
+
+#gameover {
+    display: none;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%,-50%);
+    background-color: antiquewhite;
+    padding: 30px;
+    border-radius: 4px;
+}
+
+#restart-btn {
+    padding: 5px 10px;
+}
+
+#gameover.activate {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+} 
