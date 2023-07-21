@@ -20,7 +20,7 @@ main {
 
 canvas {
     outline: 1px solid whitesmoke;
-    max-width: 600px;
+    max-width: 610px;
     width: 100vw;
     height: calc(100vh - 20px);
 }

@@ -3,7 +3,7 @@ import { gameOver, restartGame, startGame, startBtn } from './ui.js'
 
 const canvas = document.querySelector('canvas')!
 const ctx = canvas.getContext('2d')!
-canvas.width = Math.min(document.documentElement.clientWidth, 600)
+canvas.width = Math.min(document.documentElement.clientWidth, 610)
 canvas.height = document.documentElement.clientHeight - 20
 
 ctx.strokeStyle = 'white'
@@ -131,9 +131,10 @@ class Effect {
         this.platform = new Platform(this.canvas, 80, 10, 1, 1, 'hsl(215,100%,50%)')
         this.noOfTilesPerRow = Math.floor(this.width / (Tile.width))
         this.noOfRows = 3
-        this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width) * 0.5
+        this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width + Tile.gap) * 0.5
         this.inactiveTiles = 0
         this.createParticle()
+        console.log(this.width, Tile.width)
     }
 
     createParticle() {
@@ -170,6 +171,7 @@ class Platform {
     width: number;
     x: number;
     y: number;
+    radius: number;
     bounceFactor: number;
     color: string;
     shake: ShakeOnHit
@@ -182,6 +184,7 @@ class Platform {
         this.width = width
         this.x = x
         this.y = this.canvasHeight - this.height - 10
+        this.radius = 4
         this.bounceFactor = bounce
         this.color = color
         this.shake = new ShakeOnHit()
@@ -193,7 +196,15 @@ class Platform {
 
         context.fillStyle = this.color
         this.shake.vibrate()
-        context.fillRect(this.x + this.shake.vibrateX, this.y + this.shake.vibrateY, this.width, this.height)
+
+        context.beginPath();
+        context.moveTo(this.x + this.radius, this.y);
+        context.arcTo(this.x + this.width, this.y, this.x + this.width, this.y + this.height, this.radius);
+        context.arcTo(this.x + this.width, this.y + this.height, this.x, this.y + this.height, this.radius);
+        context.arcTo(this.x, this.y + this.height, this.x, this.y, this.radius);
+        context.arcTo(this.x, this.y, this.x + this.width, this.y, this.radius);
+        context.closePath();
+        context.fill();
 
         this.shake.runEveryFrame()
     }
