@@ -3,8 +3,8 @@ import { gameOver, restartGame, startGame, startBtn } from './ui.js'
 
 const canvas = document.querySelector('canvas')!
 const ctx = canvas.getContext('2d')!
-canvas.width = document.documentElement.clientWidth
-canvas.height = document.documentElement.clientHeight
+canvas.width = Math.min(document.documentElement.clientWidth, 600)
+canvas.height = document.documentElement.clientHeight - 20
 
 ctx.strokeStyle = 'white'
 const fps = 30; // Frames per second
@@ -53,12 +53,27 @@ class Ball {
     }
     update(platform: Platform) {
         //collision with platform
-        if (!this.doubleBounce && this.x + this.radius > platform.x && this.x - this.radius < platform.x + platform.width && platform.y < this.y + this.radius) {
+
+        const circle = { x: this.x, y: this.y, radius: this.radius }
+        const rectangle = { x: platform.x, y: platform.y, width: platform.width, height: platform.height }
+        if (!this.doubleBounce && detectCollision(circle, rectangle)) {
             this.vy *= -1
-            if (platform.y < this.y && platform.y + platform.height > this.y) {
-                console.log('fire')
-                this.vx *= -1
-            }
+            // if (platform.y < this.y && platform.y + platform.height > this.y) {
+
+            const ratio = (this.x - platform.x) / (platform.width)
+            // this.vx *= ratio
+
+            if (ratio < 0.2)
+                this.vx = -2
+            else if (ratio < 0.4)
+                this.vx = -1
+            else if (ratio < 0.6)
+                this.vx = 0
+            else if (ratio < 0.8)
+                this.vx = 1
+            else if (ratio <= 1)
+                this.vx = 2
+            // }
             this.doubleBounce = true
             platform.shake.shake = 1
 
@@ -172,6 +187,7 @@ class Platform {
         this.shake = new ShakeOnHit()
     }
     draw(context: CanvasRenderingContext2D) {
+        // controls
         if (this.x - 10 * controls.x > 0 && this.x + this.width - 10 * controls.x < this.canvasWidth)
             this.x -= 10 * controls.x
 
@@ -188,6 +204,8 @@ class Tile {
     y: number;
     color: string;
     deactivate: boolean;
+    effectiveWidth: number;
+    effectiveHeight: number;
 
     static width = 40
     static height = 20
@@ -197,35 +215,41 @@ class Tile {
         this.y = y
         this.color = 'hsl(100,100%,50%)'
         this.deactivate = false
+        this.effectiveWidth = Tile.width - Tile.gap
+        this.effectiveHeight = Tile.height - Tile.gap
     }
 
     draw(context: CanvasRenderingContext2D) {
         context.fillStyle = this.color
-        context.fillRect(this.x, this.y, Tile.width - Tile.gap, Tile.height - Tile.gap)
+        context.fillRect(this.x, this.y, this.effectiveWidth, this.effectiveHeight)
     }
 
     deactivateBall(ball: Ball) {
-        if (!this.deactivate && this.x < ball.x + ball.radius && this.x + Tile.width - Tile.gap > ball.x && this.y + Tile.height - Tile.gap > ball.y + ball.radius) {
+
+        const circle = { x: ball.x, y: ball.y, radius: ball.radius }
+        const rectangle = { x: this.x, y: this.y, width: this.effectiveWidth, height: this.effectiveHeight }
+        if (!this.deactivate && detectCollision(circle, rectangle)) {
             this.deactivate = true
             this.color = 'hsl(100,100%,0%)'
             this.deactivate = true
             return 1
         }
         else return 0
+
     }
 }
 
 class ShakeOnHit {
     shake: number;
     amplitude: number;
-    angle: number;
+    switch: number;
     damping: number;
     vibrateX: number;
     vibrateY: number;
     constructor() {
         this.shake = 0
         this.amplitude = 2
-        this.angle = 90
+        this.switch = 1
         this.damping = 0.9;
         this.vibrateX = 0
         this.vibrateY = 0
@@ -233,13 +257,13 @@ class ShakeOnHit {
 
     vibrate() {
         if (this.shake > 0) {
-            this.vibrateX = Math.sin(this.angle) * this.amplitude * this.shake
+            this.vibrateX = this.switch * this.amplitude * this.shake
             this.vibrateY = this.amplitude * this.shake
             this.shake *= this.damping
         }
     }
     runEveryFrame() {
-        this.angle *= -1
+        this.switch *= -1
     }
 }
 
@@ -264,3 +288,10 @@ startBtn.addEventListener('click', () => {
     startGame.classList.remove('activate')
     animation(0)
 })
+
+
+function detectCollision(circle: ICircleCollisionProps, rectangle: IRectangleCollisionProps): boolean {
+    if (circle.x + circle.radius > rectangle.x && circle.x - circle.radius < rectangle.x + rectangle.width && circle.y + circle.radius > rectangle.y && circle.y - circle.radius < rectangle.y + rectangle.height)
+        return true
+    else return false
+}
