@@ -1,26 +1,21 @@
 import { Move as controls } from './controls.js'
 import { gameOver, restartGame, startGame, startBtn } from './ui.js'
+import { SoundEffect, soundsArrayLength } from './soundManager.js'
 
 const canvas = document.querySelector('canvas')!
 const ctx = canvas.getContext('2d')!
 canvas.width = Math.min(document.documentElement.clientWidth, 610)
 canvas.height = document.documentElement.clientHeight - 20
-
 ctx.strokeStyle = 'white'
-const fps = 30; // Frames per second
-const interval = 1000 / fps; // Interval between frames in milliseconds
-let lastTime = 0;
+
+const fps = 30 // Frames per second
+const frameTime = 1000 / fps // frameTime between frames in milliseconds
+let lastTime = 0
+let deltaTime = 0
+
 let requestAnimationFrameRef: number
 
-// window.addEventListener('resize', () => {
-//     cancelAnimationFrame(requestAnimationFrameRef)
-//     canvas.width = document.documentElement.clientWidth
-//     canvas.height = document.documentElement.clientHeight
-//     effect = new Effect(canvas)
-//     animation(0)
-// })
-
-
+// add resize event handler here
 
 class Ball {
     x: number;
@@ -52,17 +47,14 @@ class Ball {
         context.fill()
     }
     update(platform: Platform) {
-        //collision with platform
 
         const circle = { x: this.x, y: this.y, radius: this.radius }
         const rectangle = { x: platform.x, y: platform.y, width: platform.width, height: platform.height }
+
+        //collision with platform
         if (!this.doubleBounce && detectCollision(circle, rectangle)) {
             this.vy *= -1
-            // if (platform.y < this.y && platform.y + platform.height > this.y) {
-
             const ratio = (this.x - platform.x) / (platform.width)
-            // this.vx *= ratio
-
             if (ratio < 0.2)
                 this.vx = -2
             else if (ratio < 0.4)
@@ -73,9 +65,10 @@ class Ball {
                 this.vx = 1
             else if (ratio <= 1)
                 this.vx = 2
-            // }
             this.doubleBounce = true
             platform.shake.shake = 1
+            const sound = Math.floor(Math.random() * (5 - 3)) + 3
+            SoundEffect(sound)
 
         }
 
@@ -134,7 +127,6 @@ class Effect {
         this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width + Tile.gap) * 0.5
         this.inactiveTiles = 0
         this.createParticle()
-        console.log(this.width, Tile.width)
     }
 
     createParticle() {
@@ -217,10 +209,12 @@ class Tile {
     deactivate: boolean;
     effectiveWidth: number;
     effectiveHeight: number;
+    soundTrack: number;
 
     static width = 40
     static height = 20
     static gap = 5
+
     constructor(x: number, y: number) {
         this.x = x
         this.y = y
@@ -228,6 +222,7 @@ class Tile {
         this.deactivate = false
         this.effectiveWidth = Tile.width - Tile.gap
         this.effectiveHeight = Tile.height - Tile.gap
+        this.soundTrack = Math.floor(Math.random() * 3)
     }
 
     draw(context: CanvasRenderingContext2D) {
@@ -243,6 +238,7 @@ class Tile {
             this.deactivate = true
             this.color = 'hsl(100,100%,0%)'
             this.deactivate = true
+            SoundEffect(this.soundTrack)
             return 1
         }
         else return 0
@@ -280,16 +276,16 @@ class ShakeOnHit {
 
 let effect = new Effect(canvas)
 
-function animation(timestamp: number) {
+function animation(currentTime: number) {
     requestAnimationFrameRef = requestAnimationFrame(animation) // this should always be at the start
     // Calculate the time difference since the last frame
-    let elapsedTime = timestamp - lastTime;
+    deltaTime = currentTime - lastTime;
 
     // Proceed only if enough time has elapsed based on the desired frame rate
-    if (elapsedTime > interval) {
+    if (deltaTime >= frameTime) {
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         effect.handleParticles(ctx)
-        lastTime = timestamp;
+        lastTime = currentTime - (deltaTime % frameTime)
     }
 }
 

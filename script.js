@@ -1,13 +1,15 @@
 import { Move as controls } from './controls.js';
 import { gameOver, restartGame, startGame, startBtn } from './ui.js';
+import { SoundEffect } from './soundManager.js';
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = Math.min(document.documentElement.clientWidth, 610);
 canvas.height = document.documentElement.clientHeight - 20;
 ctx.strokeStyle = 'white';
 const fps = 30;
-const interval = 1000 / fps;
+const frameTime = 1000 / fps;
 let lastTime = 0;
+let deltaTime = 0;
 let requestAnimationFrameRef;
 class Ball {
     constructor(effect) {
@@ -45,6 +47,8 @@ class Ball {
                 this.vx = 2;
             this.doubleBounce = true;
             platform.shake.shake = 1;
+            const sound = Math.floor(Math.random() * (5 - 3)) + 3;
+            SoundEffect(sound);
         }
         if ((this.x + this.radius) > this.effect.width || (this.x - this.radius) < 0) {
             this.x = this.x;
@@ -79,7 +83,6 @@ class Effect {
         this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width + Tile.gap) * 0.5;
         this.inactiveTiles = 0;
         this.createParticle();
-        console.log(this.width, Tile.width);
     }
     createParticle() {
         for (let i = 1; i <= this.noOfRows; i++) {
@@ -140,6 +143,7 @@ class Tile {
         this.deactivate = false;
         this.effectiveWidth = Tile.width - Tile.gap;
         this.effectiveHeight = Tile.height - Tile.gap;
+        this.soundTrack = Math.floor(Math.random() * 3);
     }
     draw(context) {
         context.fillStyle = this.color;
@@ -152,6 +156,7 @@ class Tile {
             this.deactivate = true;
             this.color = 'hsl(100,100%,0%)';
             this.deactivate = true;
+            SoundEffect(this.soundTrack);
             return 1;
         }
         else
@@ -182,13 +187,13 @@ class ShakeOnHit {
     }
 }
 let effect = new Effect(canvas);
-function animation(timestamp) {
+function animation(currentTime) {
     requestAnimationFrameRef = requestAnimationFrame(animation);
-    let elapsedTime = timestamp - lastTime;
-    if (elapsedTime > interval) {
+    deltaTime = currentTime - lastTime;
+    if (deltaTime >= frameTime) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         effect.handleParticles(ctx);
-        lastTime = timestamp;
+        lastTime = currentTime - (deltaTime % frameTime);
     }
 }
 startBtn.addEventListener('click', () => {
