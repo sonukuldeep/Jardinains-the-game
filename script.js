@@ -24,7 +24,7 @@ class Ball {
         this.doubleBounce = false;
     }
     draw(context) {
-        context.fillStyle = `hsl(${this.x * this.fillColorFactor}, 100%, 50%)`;
+        context.fillStyle = `hsl(60, 100%, 50%)`;
         context.beginPath();
         context.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         context.fill();
@@ -85,9 +85,10 @@ class Effect {
         this.createParticle();
     }
     createParticle() {
-        for (let i = 1; i <= this.noOfRows; i++) {
+        for (let i = 2; i <= this.noOfRows + 1; i++) {
             for (let j = 0; j < this.noOfTilesPerRow; j++) {
-                this.tiles.push(new Tile(Tile.width * j + this.tileAdjustment, Tile.height * i));
+                const spawnCharaterOnFirstRow = i === 2 ? true : false;
+                this.tiles.push(new Tile(Tile.width * j + this.tileAdjustment, Tile.height * i, spawnCharaterOnFirstRow));
             }
         }
     }
@@ -136,18 +137,23 @@ class Platform {
     }
 }
 class Tile {
-    constructor(x, y) {
+    constructor(x, y, spawn = false) {
         this.x = x;
         this.y = y;
-        this.color = 'hsl(100,100%,50%)';
+        this.color = 'hsl(300,100%,50%)';
         this.deactivate = false;
         this.effectiveWidth = Tile.width - Tile.gap;
         this.effectiveHeight = Tile.height - Tile.gap;
         this.soundTrack = Math.floor(Math.random() * 3);
+        this.nains = new Character(this.x + 5, this.y);
+        this.shouldDrawNains = spawn && Math.floor(Math.random() * 20) === 1 ? true : false;
     }
     draw(context) {
         context.fillStyle = this.color;
         context.fillRect(this.x, this.y, this.effectiveWidth, this.effectiveHeight);
+        if (this.shouldDrawNains) {
+            this.nains.drawNains(context);
+        }
     }
     deactivateBall(ball) {
         const circle = { x: ball.x, y: ball.y, radius: ball.radius };
@@ -157,6 +163,11 @@ class Tile {
             this.color = 'hsl(100,100%,0%)';
             this.deactivate = true;
             SoundEffect(this.soundTrack);
+            if (this.shouldDrawNains) {
+                this.nains.fall = true;
+                this.nains.force = 5;
+                this.nains.vy = 2;
+            }
             return 1;
         }
         else
@@ -184,6 +195,41 @@ class ShakeOnHit {
     }
     runEveryFrame() {
         this.switch *= -1;
+    }
+}
+class Character {
+    constructor(x, y) {
+        this.x = x;
+        this.width = 24 + 1;
+        this.height = 24 + 1;
+        this.y = y;
+        this.vx = 0;
+        this.vy = 0;
+        this.force = 0;
+        this.damping = 0.98;
+        this.nainsImage = document.querySelector('#character img');
+        this.frameNains = 0;
+        this.verticalShift = 25;
+        this.fall = false;
+    }
+    drawNains(context) {
+        if (!this.fall) {
+            const rowNumber = 0;
+            context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0;
+        }
+        else {
+            const rowNumber = 6;
+            context.drawImage(this.nainsImage, this.frameNains * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            this.frameNains < 14 ? this.frameNains += 1 : this.frameNains = 0;
+            if (this.vy - this.force > 0) {
+                this.vy *= 1.02;
+            }
+            else {
+                this.force *= this.damping;
+            }
+            this.y += this.vy - this.force;
+        }
     }
 }
 let effect = new Effect(canvas);

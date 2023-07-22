@@ -41,7 +41,8 @@ class Ball {
     }
 
     draw(context: CanvasRenderingContext2D) {
-        context.fillStyle = `hsl(${this.x * this.fillColorFactor}, 100%, 50%)`
+        context.fillStyle = `hsl(60, 100%, 50%)`
+        // context.fillStyle = `hsl(${this.x * this.fillColorFactor}, 100%, 50%)`
         context.beginPath()
         context.arc(this.x, this.y, this.radius, 0, Math.PI * 2)
         context.fill()
@@ -115,6 +116,7 @@ class Effect {
     tileAdjustment: number;
     inactiveTiles: number;
 
+
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas
         this.width = this.canvas.width
@@ -126,14 +128,15 @@ class Effect {
         this.noOfRows = 3
         this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width + Tile.gap) * 0.5
         this.inactiveTiles = 0
+
         this.createParticle()
     }
 
     createParticle() {
-
-        for (let i = 1; i <= this.noOfRows; i++) {
+        for (let i = 2; i <= this.noOfRows + 1; i++) { //starting from to to give myself 2xheight for charater placement 
             for (let j = 0; j < this.noOfTilesPerRow; j++) {
-                this.tiles.push(new Tile(Tile.width * j + this.tileAdjustment, Tile.height * i))
+                const spawnCharaterOnFirstRow = i === 2 ? true : false
+                this.tiles.push(new Tile(Tile.width * j + this.tileAdjustment, Tile.height * i, spawnCharaterOnFirstRow))
             }
         }
     }
@@ -210,24 +213,30 @@ class Tile {
     effectiveWidth: number;
     effectiveHeight: number;
     soundTrack: number;
-
+    nains: Character;
+    shouldDrawNains: boolean
     static width = 40
     static height = 20
     static gap = 5
 
-    constructor(x: number, y: number) {
+    constructor(x: number, y: number, spawn = false) {
         this.x = x
         this.y = y
-        this.color = 'hsl(100,100%,50%)'
+        this.color = 'hsl(300,100%,50%)'
         this.deactivate = false
         this.effectiveWidth = Tile.width - Tile.gap
         this.effectiveHeight = Tile.height - Tile.gap
         this.soundTrack = Math.floor(Math.random() * 3)
+        this.nains = new Character(this.x + 5, this.y)
+        this.shouldDrawNains = spawn && Math.floor(Math.random() * 20) === 1 ? true : false
     }
 
     draw(context: CanvasRenderingContext2D) {
         context.fillStyle = this.color
         context.fillRect(this.x, this.y, this.effectiveWidth, this.effectiveHeight)
+        if (this.shouldDrawNains) {
+            this.nains.drawNains(context)
+        }
     }
 
     deactivateBall(ball: Ball) {
@@ -239,6 +248,11 @@ class Tile {
             this.color = 'hsl(100,100%,0%)'
             this.deactivate = true
             SoundEffect(this.soundTrack)
+            if (this.shouldDrawNains) {
+                this.nains.fall = true
+                this.nains.force = 5
+                this.nains.vy = 2
+            }
             return 1
         }
         else return 0
@@ -271,6 +285,57 @@ class ShakeOnHit {
     }
     runEveryFrame() {
         this.switch *= -1
+    }
+}
+
+class Character {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    force: number;
+    damping: number;
+    width: number;
+    height: number;
+    nainsImage: HTMLImageElement;
+    frameNains: number;
+    verticalShift: number;
+    fall: boolean;
+
+    constructor(x: number, y: number) {
+        this.x = x
+        this.width = 24 + 1
+        this.height = 24 + 1
+        this.y = y
+        this.vx = 0
+        this.vy = 0
+        this.force = 0
+        this.damping = 0.98
+        this.nainsImage = document.querySelector('#character img')!
+        this.frameNains = 0
+        this.verticalShift = 25
+        this.fall = false
+    }
+
+    drawNains(context: CanvasRenderingContext2D) {
+        if (!this.fall) {
+            const rowNumber = 0
+            context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
+            this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0
+        } else {
+            const rowNumber = 6
+            context.drawImage(this.nainsImage, this.frameNains * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
+            this.frameNains < 14 ? this.frameNains += 1 : this.frameNains = 0
+
+
+
+            if (this.vy - this.force > 0) {
+                this.vy *= 1.02
+            } else {
+                this.force *= this.damping
+            }
+            this.y += this.vy - this.force
+        }
     }
 }
 
