@@ -96,6 +96,9 @@ class Effect {
         this.tiles.forEach(tile => {
             tile.draw(context);
             this.inactiveTiles += tile.deactivateBall(this.ball);
+            const rectangle1 = { x: tile.nains.x, y: tile.nains.y, width: tile.nains.width, height: tile.nains.height };
+            const rectangle2 = { x: this.platform.x, y: this.platform.y, width: this.platform.width, height: this.platform.height };
+            tile.nains.bounceNaine(rectangle1, rectangle2);
         });
         this.ball.draw(context);
         this.ball.update(this.platform);
@@ -150,7 +153,7 @@ class Tile {
     }
     draw(context) {
         context.fillStyle = this.color;
-        context.fillRect(this.x, this.y, this.effectiveWidth, this.effectiveHeight);
+        !this.deactivate && context.fillRect(this.x, this.y, this.effectiveWidth, this.effectiveHeight);
         if (this.shouldDrawNains) {
             this.nains.drawNains(context);
         }
@@ -160,7 +163,6 @@ class Tile {
         const rectangle = { x: this.x, y: this.y, width: this.effectiveWidth, height: this.effectiveHeight };
         if (!this.deactivate && detectCollision(circle, rectangle)) {
             this.deactivate = true;
-            this.color = 'hsl(100,100%,0%)';
             this.deactivate = true;
             SoundEffect(this.soundTrack);
             if (this.shouldDrawNains) {
@@ -208,19 +210,24 @@ class Character {
         this.force = 0;
         this.damping = 0.98;
         this.nainsImage = document.querySelector('#character img');
-        this.frameNains = 0;
+        this.frameNains = Math.floor(Math.random() * 8);
         this.verticalShift = 25;
         this.fall = false;
+        this.spawn = Math.floor(Math.random() * (12000 - 10000)) + 10000;
+        this.canSpawn = false;
     }
     drawNains(context) {
         if (!this.fall) {
             const rowNumber = 0;
-            context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            if (lastTime > this.spawn) {
+                this.canSpawn = true;
+                context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            }
             this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0;
         }
         else {
             const rowNumber = 6;
-            context.drawImage(this.nainsImage, this.frameNains * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            this.canSpawn && context.drawImage(this.nainsImage, this.frameNains * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
             this.frameNains < 14 ? this.frameNains += 1 : this.frameNains = 0;
             if (this.vy - this.force > 0) {
                 this.vy *= 1.02;
@@ -229,6 +236,14 @@ class Character {
                 this.force *= this.damping;
             }
             this.y += this.vy - this.force;
+        }
+    }
+    bounceNaine(rectangle1, rectangle2) {
+        if (!this.fall || !this.canSpawn)
+            return;
+        if (detectRectangleCollision(rectangle1, rectangle2)) {
+            console.log('fire');
+            this.force = 5;
         }
     }
 }
@@ -248,6 +263,12 @@ startBtn.addEventListener('click', () => {
 });
 function detectCollision(circle, rectangle) {
     if (circle.x + circle.radius > rectangle.x && circle.x - circle.radius < rectangle.x + rectangle.width && circle.y + circle.radius > rectangle.y && circle.y - circle.radius < rectangle.y + rectangle.height)
+        return true;
+    else
+        return false;
+}
+function detectRectangleCollision(rectangle1, rectangle2) {
+    if (rectangle1.x + rectangle1.width > rectangle2.x && rectangle1.x < rectangle2.x + rectangle2.width && rectangle1.y + rectangle1.height > rectangle2.y && rectangle1.y < rectangle2.y + rectangle2.height)
         return true;
     else
         return false;
