@@ -136,13 +136,14 @@ class Platform {
         this.width = width;
         this.x = x;
         this.y = this.canvasHeight - this.height - 10;
+        this.platformHitPanelty = 0.6;
         this.radius = 4;
         this.bounceFactor = bounce;
         this.color = color;
         this.shake = new ShakeOnHit();
     }
     draw(context) {
-        if (this.x - 10 * controls.x > 0 && this.x + this.width - 10 * controls.x < this.canvasWidth)
+        if (this.shake.shake < this.platformHitPanelty && this.x - 10 * controls.x > 0 && this.x + this.width - 10 * controls.x < this.canvasWidth)
             this.x -= 10 * controls.x;
         context.fillStyle = this.color;
         this.shake.vibrate();
@@ -236,20 +237,38 @@ class Character {
         this.lastCollision = 0;
         this.potNumber = Math.floor(Math.random() * (13 - 9)) + 9;
         this.potHeight = 1.7;
+        this.angle = 0;
+        this.potx = 1;
+        this.poty = 1;
+        this.potV = 10;
     }
     drawNains(context, platform) {
         if (!this.fall) {
             const rowNumber = 0;
             if (lastTime > this.spawn) {
-                if (lastTime - this.spawn > 5000) {
-                    const angle = Math.atan2(platform.y - this.y, platform.x - this.x);
-                    let angleInDegrees = Math.floor((180 / Math.PI) * angle);
-                    if (angleInDegrees < 75)
-                        this.frameNains = 3;
-                    else if (angleInDegrees > 105)
-                        this.frameNains = 2;
-                    else
-                        this.frameNains = 1;
+                if (lastTime - this.spawn > 8000) {
+                    if (this.potx === 1 && this.poty === 1) {
+                        this.angle = Math.atan2(platform.y - this.y, (platform.x + platform.width / 3) - this.x);
+                        this.potx = this.x;
+                        this.poty = this.y;
+                    }
+                    this.potx += this.potV * Math.cos(this.angle);
+                    this.poty += this.potV * Math.sin(this.angle);
+                    this.potV *= 1.01;
+                    let rowNumber = 4;
+                    context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+                    this.frameNains < 8 ? this.frameNains += 0.5 : this.frameNains = 0;
+                    rowNumber = 4;
+                    context.drawImage(this.nainsImage, this.potNumber * this.width, rowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height);
+                    if (lastTime - this.spawn > 15000) {
+                        this.spawn = lastTime;
+                        this.potx = 1;
+                        this.poty = 1;
+                        this.potV = 10;
+                    }
+                }
+                else if (lastTime - this.spawn > 5000) {
+                    this.frameNains = 1;
                     let rowNumber = 2;
                     context.drawImage(this.nainsImage, 1 * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
                     this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0;

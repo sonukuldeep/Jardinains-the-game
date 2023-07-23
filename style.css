@@ -57,3 +57,10 @@ canvas {
     gap: 20px;
     align-items: center;
 }
+
+
+@media (width < 768px) {
+    canvas {
+        outline: none;
+    }
+}
