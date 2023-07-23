@@ -98,14 +98,17 @@ class Effect {
     }
     handleParticles(context) {
         this.tiles.forEach((tile, index) => {
-            tile.draw(context);
+            tile.draw(context, this.platform);
             const shouldDeactivate = tile.deactivateBall(this.ball);
             this.inactiveTiles += shouldDeactivate;
             if (shouldDeactivate === 1)
                 this.cleanUp(index);
-            const rectangle1 = { x: tile.nains.x, y: tile.nains.y, width: tile.nains.width, height: tile.nains.height };
+            const rectangle1 = { x: tile.nains.x, y: tile.nains.y, width: tile.nains.width, height: tile.nains.height - tile.nains.verticalShift };
             const rectangle2 = { x: this.platform.x, y: this.platform.y, width: this.platform.width, height: this.platform.height };
-            tile.nains.bounceNaine(rectangle1, rectangle2) && this.cleanUp(index);
+            if (tile.nains.bounceNaine(rectangle1, rectangle2)) {
+                this.platform.shake.shake = 1;
+                this.cleanUp(index);
+            }
         });
         this.ball.draw(context);
         this.ball.update(this.platform);
@@ -164,13 +167,13 @@ class Tile {
         this.effectiveHeight = Tile.height - Tile.gap;
         this.soundTrack = Math.floor(Math.random() * 3);
         this.nains = new Character(this.x + 5, this.y);
-        this.shouldDrawNains = spawn && Math.floor(Math.random() * 5) === 1 ? true : false;
+        this.shouldDrawNains = true;
     }
-    draw(context) {
+    draw(context, platform) {
         context.fillStyle = this.color;
         !this.deactivate && context.fillRect(this.x, this.y, this.effectiveWidth, this.effectiveHeight);
         if (this.shouldDrawNains) {
-            this.nains.drawNains(context);
+            this.nains.drawNains(context, platform);
         }
     }
     deactivateBall(ball) {
@@ -216,7 +219,6 @@ class ShakeOnHit {
 }
 class Character {
     constructor(x, y) {
-        this.lastCollision = 0;
         this.x = x;
         this.width = 24 + 1;
         this.height = 24 + 1;
@@ -232,15 +234,34 @@ class Character {
         this.spawn = Math.floor(Math.random() * (12000 - 10000)) + 10000;
         this.canSpawn = false;
         this.lastCollision = 0;
+        this.potNumber = Math.floor(Math.random() * (13 - 9)) + 9;
+        this.potHeight = 1.7;
     }
-    drawNains(context) {
+    drawNains(context, platform) {
         if (!this.fall) {
             const rowNumber = 0;
             if (lastTime > this.spawn) {
+                if (lastTime - this.spawn > 5000) {
+                    const angle = Math.atan2(platform.y - this.y, platform.x - this.x);
+                    let angleInDegrees = Math.floor((180 / Math.PI) * angle);
+                    if (angleInDegrees < 75)
+                        this.frameNains = 3;
+                    else if (angleInDegrees > 105)
+                        this.frameNains = 2;
+                    else
+                        this.frameNains = 1;
+                    let rowNumber = 2;
+                    context.drawImage(this.nainsImage, 1 * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+                    this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0;
+                    rowNumber = 4;
+                    context.drawImage(this.nainsImage, this.potNumber * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift * this.potHeight, this.width, this.height);
+                }
+                else {
+                    context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+                    this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0;
+                }
                 this.canSpawn = true;
-                context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
             }
-            this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0;
         }
         else {
             const rowNumber = 6;
@@ -259,11 +280,12 @@ class Character {
         if (!this.fall || !this.canSpawn || lastTime - this.lastCollision < 100)
             return false;
         if (detectRectangleCollision(rectangle1, rectangle2)) {
-            this.force *= this.vy * 0.55;
+            this.force *= this.vy * 0.53;
             this.vy = 2;
             this.lastCollision = lastTime;
+            return true;
         }
-        return true;
+        return false;
     }
 }
 let effect = new Effect(canvas);
