@@ -35,7 +35,9 @@ class Ball {
         if (!this.doubleBounce && detectCollision(circle, rectangle)) {
             this.vy *= -1;
             const ratio = (this.x - platform.x) / (platform.width);
-            if (ratio < 0.2)
+            if (ratio <= 0)
+                this.vx = -3;
+            else if (ratio < 0.2)
                 this.vx = -2;
             else if (ratio < 0.4)
                 this.vx = -1;
@@ -43,8 +45,10 @@ class Ball {
                 this.vx = 0;
             else if (ratio < 0.8)
                 this.vx = 1;
-            else if (ratio <= 1)
+            else if (ratio < 1)
                 this.vx = 2;
+            else if (ratio >= 1)
+                this.vx = 3;
             this.doubleBounce = true;
             platform.shake.shake = 1;
             const sound = Math.floor(Math.random() * (5 - 3)) + 3;
@@ -77,7 +81,7 @@ class Effect {
         this.height = this.canvas.height;
         this.ball = new Ball(this);
         this.tiles = [];
-        this.platform = new Platform(this.canvas, 80, 10, 1, 1, 'hsl(215,100%,50%)');
+        this.platform = new Platform(this.canvas, 80, 10, 1, 'hsl(215,100%,50%)');
         this.noOfTilesPerRow = Math.floor(this.width / (Tile.width));
         this.noOfRows = 3;
         this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width + Tile.gap) * 0.5;
@@ -93,12 +97,15 @@ class Effect {
         }
     }
     handleParticles(context) {
-        this.tiles.forEach(tile => {
+        this.tiles.forEach((tile, index) => {
             tile.draw(context);
-            this.inactiveTiles += tile.deactivateBall(this.ball);
+            const shouldDeactivate = tile.deactivateBall(this.ball);
+            this.inactiveTiles += shouldDeactivate;
+            if (shouldDeactivate === 1)
+                this.cleanUp(index);
             const rectangle1 = { x: tile.nains.x, y: tile.nains.y, width: tile.nains.width, height: tile.nains.height };
             const rectangle2 = { x: this.platform.x, y: this.platform.y, width: this.platform.width, height: this.platform.height };
-            tile.nains.bounceNaine(rectangle1, rectangle2);
+            tile.nains.bounceNaine(rectangle1, rectangle2) && this.cleanUp(index);
         });
         this.ball.draw(context);
         this.ball.update(this.platform);
@@ -108,9 +115,17 @@ class Effect {
             cancelAnimationFrame(requestAnimationFrameRef);
         }
     }
+    cleanUp(index) {
+        const tile = this.tiles[index];
+        if ((tile.deactivate && !tile.nains.canSpawn) || (tile.nains.canSpawn && tile.nains.y > this.canvas.height + 50)) {
+            const temp = [...this.tiles];
+            temp.splice(index, 1);
+            this.tiles = temp;
+        }
+    }
 }
 class Platform {
-    constructor(canvas, width, x, bounce, shake, color) {
+    constructor(canvas, width, x, bounce, color) {
         this.canvas = canvas;
         this.canvasWidth = canvas.width;
         this.canvasHeight = canvas.height;
@@ -129,11 +144,11 @@ class Platform {
         context.fillStyle = this.color;
         this.shake.vibrate();
         context.beginPath();
-        context.moveTo(this.x + this.radius, this.y);
-        context.arcTo(this.x + this.width, this.y, this.x + this.width, this.y + this.height, this.radius);
-        context.arcTo(this.x + this.width, this.y + this.height, this.x, this.y + this.height, this.radius);
-        context.arcTo(this.x, this.y + this.height, this.x, this.y, this.radius);
-        context.arcTo(this.x, this.y, this.x + this.width, this.y, this.radius);
+        context.moveTo(this.x + this.shake.vibrateX + this.radius, this.y + this.shake.vibrateY);
+        context.arcTo(this.x + this.shake.vibrateX + this.width, this.y + this.shake.vibrateY, this.x + this.shake.vibrateX + this.width, this.y + this.shake.vibrateY + this.height, this.radius);
+        context.arcTo(this.x + this.shake.vibrateX + this.width, this.y + this.shake.vibrateY + this.height, this.x + this.shake.vibrateX, this.y + this.shake.vibrateY + this.height, this.radius);
+        context.arcTo(this.x + this.shake.vibrateX, this.y + this.shake.vibrateY + this.height, this.x + this.shake.vibrateX, this.y + this.shake.vibrateY, this.radius);
+        context.arcTo(this.x + this.shake.vibrateX, this.y + this.shake.vibrateY, this.x + this.shake.vibrateX + this.width, this.y + this.shake.vibrateY, this.radius);
         context.closePath();
         context.fill();
         this.shake.runEveryFrame();
@@ -149,7 +164,7 @@ class Tile {
         this.effectiveHeight = Tile.height - Tile.gap;
         this.soundTrack = Math.floor(Math.random() * 3);
         this.nains = new Character(this.x + 5, this.y);
-        this.shouldDrawNains = true;
+        this.shouldDrawNains = spawn && Math.floor(Math.random() * 5) === 1 ? true : false;
     }
     draw(context) {
         context.fillStyle = this.color;
@@ -242,13 +257,13 @@ class Character {
     }
     bounceNaine(rectangle1, rectangle2) {
         if (!this.fall || !this.canSpawn || lastTime - this.lastCollision < 100)
-            return;
+            return false;
         if (detectRectangleCollision(rectangle1, rectangle2)) {
-            console.log('fire');
             this.force *= this.vy * 0.55;
             this.vy = 2;
             this.lastCollision = lastTime;
         }
+        return true;
     }
 }
 let effect = new Effect(canvas);
