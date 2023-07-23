@@ -149,7 +149,7 @@ class Tile {
         this.effectiveHeight = Tile.height - Tile.gap;
         this.soundTrack = Math.floor(Math.random() * 3);
         this.nains = new Character(this.x + 5, this.y);
-        this.shouldDrawNains = spawn && Math.floor(Math.random() * 20) === 1 ? true : false;
+        this.shouldDrawNains = true;
     }
     draw(context) {
         context.fillStyle = this.color;
@@ -201,6 +201,7 @@ class ShakeOnHit {
 }
 class Character {
     constructor(x, y) {
+        this.lastCollision = 0;
         this.x = x;
         this.width = 24 + 1;
         this.height = 24 + 1;
@@ -215,6 +216,7 @@ class Character {
         this.fall = false;
         this.spawn = Math.floor(Math.random() * (12000 - 10000)) + 10000;
         this.canSpawn = false;
+        this.lastCollision = 0;
     }
     drawNains(context) {
         if (!this.fall) {
@@ -239,11 +241,13 @@ class Character {
         }
     }
     bounceNaine(rectangle1, rectangle2) {
-        if (!this.fall || !this.canSpawn)
+        if (!this.fall || !this.canSpawn || lastTime - this.lastCollision < 100)
             return;
         if (detectRectangleCollision(rectangle1, rectangle2)) {
             console.log('fire');
-            this.force = 5;
+            this.force *= this.vy * 0.55;
+            this.vy = 2;
+            this.lastCollision = lastTime;
         }
     }
 }

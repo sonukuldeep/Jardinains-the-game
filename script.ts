@@ -232,7 +232,7 @@ class Tile {
         this.effectiveHeight = Tile.height - Tile.gap
         this.soundTrack = Math.floor(Math.random() * 3)
         this.nains = new Character(this.x + 5, this.y)
-        this.shouldDrawNains = spawn && Math.floor(Math.random() * 20) === 1 ? true : false
+        this.shouldDrawNains = true//spawn && Math.floor(Math.random() * 20) === 1 ? true : false
     }
 
     draw(context: CanvasRenderingContext2D) {
@@ -307,6 +307,7 @@ class Character {
     fall: boolean;
     spawn: number;
     canSpawn: boolean;
+    lastCollision = 0
 
     constructor(x: number, y: number) {
         this.x = x
@@ -323,6 +324,7 @@ class Character {
         this.fall = false
         this.spawn = Math.floor(Math.random() * (12000 - 10000)) + 10000
         this.canSpawn = false
+        this.lastCollision = 0
     }
 
     drawNains(context: CanvasRenderingContext2D) {
@@ -350,10 +352,12 @@ class Character {
     }
 
     bounceNaine(rectangle1: IRectangleCollisionProps, rectangle2: IRectangleCollisionProps) {
-        if (!this.fall || !this.canSpawn) return
+        if (!this.fall || !this.canSpawn || lastTime - this.lastCollision < 100) return
         if (detectRectangleCollision(rectangle1, rectangle2)) {
             console.log('fire') 
-            this.force = 5//fix this
+            this.force *= this.vy * 0.55
+            this.vy = 2
+            this.lastCollision = lastTime
         }
     }
 }
