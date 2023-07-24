@@ -337,6 +337,8 @@ class Character {
     potV: number;
     potCollided: boolean;
     explodePotKeyFrame: number;
+    explositionWidth: number;
+    explositionHeight: number;
 
     constructor(x: number, y: number) {
         this.x = x
@@ -363,16 +365,18 @@ class Character {
         this.potV = 10
         this.potCollided = false
         this.explodePotKeyFrame = 0
+        this.explositionWidth = 256
+        this.explositionHeight = 341
     }
 
     drawNains(context: CanvasRenderingContext2D, platform: Platform) {
+        let spriteSheetRowNumber: number
         if (!this.fall) {
-            const rowNumber = 0
             if (lastTime > this.spawn) {
                 if (lastTime - this.spawn > 8000) {
                     // setting up things for the first time
                     if (this.potx === 1 && this.poty === 1) {
-                        this.angle = Math.atan2(platform.y - this.y + this.verticalShift * this.potHeight, (platform.x + platform.width / 3) - this.x)
+                        this.angle = Math.atan2(platform.y - this.y + this.verticalShift * this.potHeight, (platform.x + platform.width * 0.5) - this.x)
                         this.potx = this.x
                         this.poty = this.y
                     }
@@ -382,22 +386,21 @@ class Character {
                     this.potCollided = detectRectangleCollision(rectangle1, rectangle2)
 
 
-                    let rowNumber = 4
+                    spriteSheetRowNumber = 4
                     // nains
-                    context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
-                    this.frameNains < 8 ? this.frameNains += 0.5 : this.frameNains = 0
+                    context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
 
-                    
+
                     if (!this.potCollided) {
                         this.potx += this.potV * Math.cos(this.angle)
                         this.poty += this.potV * Math.sin(this.angle)
                         this.potV *= 1.01
                         //pots
-                        context.drawImage(this.nainsImage, this.potNumber * this.width, rowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height)
+                        context.drawImage(this.nainsImage, this.potNumber * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height)
                         this.explodePotKeyFrame = 0
                     } else {
-
-                        context.drawImage(this.explosionImage, this.explodePotKeyFrame * 256, 0, 256, 341, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height)
+                        this.explodePotKeyFrame === 1 ? platform.shake.shake = 1 : ''
+                        context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight)
                         this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : ''
                     }
 
@@ -409,37 +412,28 @@ class Character {
                         this.potV = 10
                     }
                 } else if (lastTime - this.spawn > 5000) {
-                    // eyes are too small hence the eye movement is not visible
-                    // this.angle = Math.atan2(platform.y - this.y, platform.x - this.x)
-                    // let angleInDegrees = Math.floor((180 / Math.PI) * this.angle)
 
-                    // if (angleInDegrees < 75) this.frameNains = 3
-                    // else if (angleInDegrees > 105) this.frameNains = 2
-                    // else this.frameNains = 1
-                    this.frameNains = 1 // since eye movement is not visible disabling the above code
-                    // 
-                    let rowNumber = 2
+                    this.frameNains = 1 
                     // nains
-                    context.drawImage(this.nainsImage, 1 * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
-                    this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0
-                    rowNumber = 4
+                    spriteSheetRowNumber = 2
+                    context.drawImage(this.nainsImage, this.frameNains * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
+
                     //pots
-                    context.drawImage(this.nainsImage, this.potNumber * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift * this.potHeight, this.width, this.height)
+                    spriteSheetRowNumber = 4
+                    context.drawImage(this.nainsImage, this.potNumber * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift * this.potHeight, this.width, this.height)
                 }
                 else {
                     //nains
-                    context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
-                    this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0
+                    spriteSheetRowNumber = 0
+                    context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
                 }
+                this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0
                 this.canSpawn = true
             }
         } else {
-            const rowNumber = 6
-            this.canSpawn && context.drawImage(this.nainsImage, this.frameNains * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
+            spriteSheetRowNumber = 6
+            this.canSpawn && context.drawImage(this.nainsImage, this.frameNains * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
             this.frameNains < 14 ? this.frameNains += 1 : this.frameNains = 0
-
-
-
 
             if (this.vy - this.force > 0) {
                 this.vy *= 1.02
