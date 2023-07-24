@@ -113,6 +113,9 @@ class Effect {
         this.ball.draw(context);
         this.ball.update(this.platform);
         this.platform.draw(context);
+        this.tiles.forEach(tile => {
+            tile.nains.explode(context);
+        });
         if (this.inactiveTiles === this.noOfTilesPerRow * this.noOfRows) {
             restartGame.classList.add('activate');
             cancelAnimationFrame(requestAnimationFrameRef);
@@ -168,7 +171,7 @@ class Tile {
         this.effectiveHeight = Tile.height - Tile.gap;
         this.soundTrack = Math.floor(Math.random() * 3);
         this.nains = new Character(this.x + 5, this.y);
-        this.shouldDrawNains = true;
+        this.shouldDrawNains = spawn && Math.floor(Math.random() * 4) === 1 ? true : false;
     }
     draw(context, platform) {
         context.fillStyle = this.color;
@@ -243,6 +246,7 @@ class Character {
         this.poty = 1;
         this.potV = 10;
         this.potCollided = false;
+        this.potDeactivated = false;
         this.explodePotKeyFrame = 0;
         this.explositionWidth = 256;
         this.explositionHeight = 341;
@@ -259,7 +263,8 @@ class Character {
                     }
                     const rectangle1 = { x: this.potx, y: this.poty - this.verticalShift * this.potHeight, width: this.width, height: this.height };
                     const rectangle2 = { x: platform.x, y: platform.y, width: platform.width, height: platform.height };
-                    this.potCollided = detectRectangleCollision(rectangle1, rectangle2);
+                    if (!this.potDeactivated)
+                        this.potCollided = detectRectangleCollision(rectangle1, rectangle2);
                     spriteSheetRowNumber = 4;
                     context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
                     if (!this.potCollided) {
@@ -268,10 +273,11 @@ class Character {
                         this.potV *= 1.01;
                         context.drawImage(this.nainsImage, this.potNumber * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height);
                         this.explodePotKeyFrame = 0;
+                        console.log('fire');
                     }
                     else {
+                        this.potDeactivated = true;
                         this.explodePotKeyFrame === 1 ? platform.shake.shake = 1 : '';
-                        context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight);
                         this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : '';
                     }
                     if (lastTime - this.spawn > 15000) {
@@ -279,6 +285,7 @@ class Character {
                         this.potx = 1;
                         this.poty = 1;
                         this.potV = 10;
+                        this.potDeactivated = false;
                     }
                 }
                 else if (lastTime - this.spawn > 5000) {
@@ -308,6 +315,10 @@ class Character {
             }
             this.y += this.vy - this.force;
         }
+    }
+    explode(context) {
+        if (this.potCollided && lastTime - this.spawn > 8000 && !this.fall)
+            context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight);
     }
     bounceNaine(rectangle1, rectangle2) {
         if (!this.fall || !this.canSpawn || lastTime - this.lastCollision < 100)
