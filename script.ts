@@ -322,6 +322,7 @@ class Character {
     width: number;
     height: number;
     nainsImage: HTMLImageElement;
+    explosionImage: HTMLImageElement;
     frameNains: number;
     verticalShift: number;
     fall: boolean;
@@ -334,6 +335,8 @@ class Character {
     potx: number;
     poty: number;
     potV: number;
+    potCollided: boolean;
+    explodePotKeyFrame: number;
 
     constructor(x: number, y: number) {
         this.x = x
@@ -344,7 +347,8 @@ class Character {
         this.vy = 0
         this.force = 0
         this.damping = 0.98
-        this.nainsImage = document.querySelector('#character img')!
+        this.nainsImage = document.querySelector('#character .character')!
+        this.explosionImage = document.querySelector('#character .explosion')!
         this.frameNains = Math.floor(Math.random() * 8)
         this.verticalShift = 25
         this.fall = false
@@ -357,6 +361,8 @@ class Character {
         this.potx = 1
         this.poty = 1
         this.potV = 10
+        this.potCollided = false
+        this.explodePotKeyFrame = 0
     }
 
     drawNains(context: CanvasRenderingContext2D, platform: Platform) {
@@ -366,21 +372,34 @@ class Character {
                 if (lastTime - this.spawn > 8000) {
                     // setting up things for the first time
                     if (this.potx === 1 && this.poty === 1) {
-                        this.angle = Math.atan2(platform.y - this.y, (platform.x + platform.width / 3) - this.x)
+                        this.angle = Math.atan2(platform.y - this.y + this.verticalShift * this.potHeight, (platform.x + platform.width / 3) - this.x)
                         this.potx = this.x
                         this.poty = this.y
                     }
-                    this.potx += this.potV * Math.cos(this.angle)
-                    this.poty += this.potV * Math.sin(this.angle)
-                    this.potV *= 1.01 
-                    // 
+
+                    const rectangle1: IRectangleCollisionProps = { x: this.potx, y: this.poty - this.verticalShift * this.potHeight, width: this.width, height: this.height }
+                    const rectangle2: IRectangleCollisionProps = { x: platform.x, y: platform.y, width: platform.width, height: platform.height }
+                    this.potCollided = detectRectangleCollision(rectangle1, rectangle2)
+
+
                     let rowNumber = 4
                     // nains
                     context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, rowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
                     this.frameNains < 8 ? this.frameNains += 0.5 : this.frameNains = 0
-                    //pots
-                    rowNumber = 4
-                    context.drawImage(this.nainsImage, this.potNumber * this.width, rowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height)
+
+                    
+                    if (!this.potCollided) {
+                        this.potx += this.potV * Math.cos(this.angle)
+                        this.poty += this.potV * Math.sin(this.angle)
+                        this.potV *= 1.01
+                        //pots
+                        context.drawImage(this.nainsImage, this.potNumber * this.width, rowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height)
+                        this.explodePotKeyFrame = 0
+                    } else {
+
+                        context.drawImage(this.explosionImage, this.explodePotKeyFrame * 256, 0, 256, 341, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height)
+                        this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : ''
+                    }
 
                     //reset for next round of assult
                     if (lastTime - this.spawn > 15000) {
