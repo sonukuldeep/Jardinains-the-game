@@ -162,8 +162,8 @@ class Effect {
         this.ball.update(this.platform)
         this.platform.draw(context)
 
-        this.tiles.forEach(tile=>{
-            tile.nains.explode(context)
+        this.tiles.forEach(tile => {
+            // tile.nains.explode(context)
         })
 
         if (this.inactiveTiles === this.noOfTilesPerRow * this.noOfRows) {
@@ -174,6 +174,7 @@ class Effect {
 
     cleanUp(index: number) {
         const tile = this.tiles[index]
+        if (!tile) return
         if ((tile.deactivate && !tile.nains.canSpawn) || (tile.nains.canSpawn && tile.nains.y > this.canvas.height + 50)) {
             const temp = [...this.tiles]
             temp.splice(index, 1)
@@ -255,7 +256,7 @@ class Tile {
         this.effectiveHeight = Tile.height - Tile.gap
         this.soundTrack = Math.floor(Math.random() * 3)
         this.nains = new Character(this.x + 5, this.y)
-        this.shouldDrawNains = spawn && Math.floor(Math.random() * 4) === 1 ? true : false
+        this.shouldDrawNains = true //spawn && Math.floor(Math.random() * 4) === 1 ? true : false
     }
 
     draw(context: CanvasRenderingContext2D, platform: Platform) {
@@ -326,12 +327,18 @@ class Character {
     width: number;
     height: number;
     nainsImage: HTMLImageElement;
+    nainsBounceCount: number;
+    nainsWidthOnScreenX: number;
+    nainsWidthOnScreenY: number;
     explosionImage: HTMLImageElement;
+    powerUpImage: HTMLImageElement;
     frameNains: number;
     verticalShift: number;
     fall: boolean;
     spawn: number;
+    powerUp: number;
     canSpawn: boolean;
+    showPowerUp: boolean;
     lastCollision: number;
     potNumber: number;
     potHeight: number;
@@ -344,6 +351,9 @@ class Character {
     explodePotKeyFrame: number;
     explositionWidth: number;
     explositionHeight: number;
+    explosionSound: number;
+    powerUpWidth: number;
+    powerUpHeight: number;
 
     constructor(x: number, y: number) {
         this.x = x
@@ -356,10 +366,16 @@ class Character {
         this.damping = 0.98
         this.nainsImage = document.querySelector('#character .character')!
         this.explosionImage = document.querySelector('#character .explosion')!
+        this.powerUpImage = document.querySelector('#character .power-up')!
+        this.nainsBounceCount = 0
         this.frameNains = Math.floor(Math.random() * 8)
+        this.nainsWidthOnScreenX = this.width
+        this.nainsWidthOnScreenY = this.height
         this.verticalShift = 25
         this.fall = false
+        this.showPowerUp = false
         this.spawn = Math.floor(Math.random() * (12000 - 10000)) + 10000
+        this.powerUp = Math.floor(Math.random() * 9)
         this.canSpawn = false
         this.lastCollision = 0
         this.potNumber = Math.floor(Math.random() * (13 - 9)) + 9
@@ -371,8 +387,11 @@ class Character {
         this.potCollided = false
         this.potDeactivated = false
         this.explodePotKeyFrame = 0
+        this.powerUpWidth = 44
+        this.powerUpHeight = 44
         this.explositionWidth = 256
         this.explositionHeight = 341
+        this.explosionSound = Math.floor(Math.random() * (8 - 5)) + 5
     }
 
     drawNains(context: CanvasRenderingContext2D, platform: Platform) {
@@ -389,8 +408,9 @@ class Character {
 
                     const rectangle1: IRectangleCollisionProps = { x: this.potx, y: this.poty - this.verticalShift * this.potHeight, width: this.width, height: this.height }
                     const rectangle2: IRectangleCollisionProps = { x: platform.x, y: platform.y, width: platform.width, height: platform.height }
-                    if (!this.potDeactivated)
+                    if (!this.potDeactivated) {
                         this.potCollided = detectRectangleCollision(rectangle1, rectangle2)
+                    }
 
 
                     spriteSheetRowNumber = 4
@@ -404,14 +424,17 @@ class Character {
                         this.potV *= 1.01
                         //pots
                         context.drawImage(this.nainsImage, this.potNumber * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height)
-                        this.explodePotKeyFrame = 0
-                        console.log('fire')
+                        // this.explodePotKeyFrame = 0
                     } else {
-                        this.potDeactivated = true
                         // explosion. drawimage called in different function to have it show over the platform
-                        this.explodePotKeyFrame === 1 ? platform.shake.shake = 1 : ''
+                        if (!this.potDeactivated) {
+                            platform.shake.shake = 1
+                            SoundEffect(this.explosionSound)
+                        }
+
                         // context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight)
-                        this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : ''
+                        // this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : ''
+                        this.potDeactivated = true
                     }
 
                     //reset for next round of assult
@@ -421,6 +444,7 @@ class Character {
                         this.poty = 1
                         this.potV = 10
                         this.potDeactivated = false
+                        this.explodePotKeyFrame = 0
                     }
                 } else if (lastTime - this.spawn > 5000) {
 
@@ -442,8 +466,24 @@ class Character {
                 this.canSpawn = true
             }
         } else {
+
+            // bounce nains
+            if (this.nainsBounceCount > 2) {
+                this.nainsWidthOnScreenX *= 0.95
+                this.nainsWidthOnScreenY *= 0.95
+                if (this.vy - this.force < 0) {
+
+                    this.showPowerUp = true
+                    this.force *= this.damping
+                    console.log('velocity zero')
+                }
+            }
+            if(this.nainsBounceCount > 3)
+            this.canSpawn = false
+            this.canSpawn && this.showPowerUp && context.drawImage(this.powerUpImage, this.powerUp * this.powerUpWidth, 0, this.powerUpWidth, this.powerUpHeight, this.x, this.y - this.powerUpHeight, this.powerUpWidth, this.powerUpHeight)
+
             spriteSheetRowNumber = 6
-            this.canSpawn && context.drawImage(this.nainsImage, this.frameNains * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
+            this.canSpawn && !this.showPowerUp && context.drawImage(this.nainsImage, this.frameNains * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.nainsWidthOnScreenX, this.nainsWidthOnScreenY)
             this.frameNains < 14 ? this.frameNains += 1 : this.frameNains = 0
 
             if (this.vy - this.force > 0) {
@@ -452,12 +492,15 @@ class Character {
                 this.force *= this.damping
             }
             this.y += this.vy - this.force
+
         }
     }
 
     explode(context: CanvasRenderingContext2D) {
-        if (this.potCollided && lastTime - this.spawn > 8000 && !this.fall)
+        if (this.potCollided && lastTime - this.spawn > 8000 && !this.fall) {
             context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight)
+            this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : ''
+        }
     }
 
     bounceNaine(rectangle1: IRectangleCollisionProps, rectangle2: IRectangleCollisionProps): boolean {
@@ -466,6 +509,7 @@ class Character {
             this.force *= this.vy * 0.53 //higher value causes it to skip collision
             this.vy = 2
             this.lastCollision = lastTime
+            this.nainsBounceCount++
             return true
         }
         return false

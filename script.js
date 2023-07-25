@@ -114,7 +114,6 @@ class Effect {
         this.ball.update(this.platform);
         this.platform.draw(context);
         this.tiles.forEach(tile => {
-            tile.nains.explode(context);
         });
         if (this.inactiveTiles === this.noOfTilesPerRow * this.noOfRows) {
             restartGame.classList.add('activate');
@@ -123,6 +122,8 @@ class Effect {
     }
     cleanUp(index) {
         const tile = this.tiles[index];
+        if (!tile)
+            return;
         if ((tile.deactivate && !tile.nains.canSpawn) || (tile.nains.canSpawn && tile.nains.y > this.canvas.height + 50)) {
             const temp = [...this.tiles];
             temp.splice(index, 1);
@@ -171,7 +172,7 @@ class Tile {
         this.effectiveHeight = Tile.height - Tile.gap;
         this.soundTrack = Math.floor(Math.random() * 3);
         this.nains = new Character(this.x + 5, this.y);
-        this.shouldDrawNains = spawn && Math.floor(Math.random() * 4) === 1 ? true : false;
+        this.shouldDrawNains = true;
     }
     draw(context, platform) {
         context.fillStyle = this.color;
@@ -233,10 +234,16 @@ class Character {
         this.damping = 0.98;
         this.nainsImage = document.querySelector('#character .character');
         this.explosionImage = document.querySelector('#character .explosion');
+        this.powerUpImage = document.querySelector('#character .power-up');
+        this.nainsBounceCount = 0;
         this.frameNains = Math.floor(Math.random() * 8);
+        this.nainsWidthOnScreenX = this.width;
+        this.nainsWidthOnScreenY = this.height;
         this.verticalShift = 25;
         this.fall = false;
+        this.showPowerUp = false;
         this.spawn = Math.floor(Math.random() * (12000 - 10000)) + 10000;
+        this.powerUp = Math.floor(Math.random() * 9);
         this.canSpawn = false;
         this.lastCollision = 0;
         this.potNumber = Math.floor(Math.random() * (13 - 9)) + 9;
@@ -248,8 +255,11 @@ class Character {
         this.potCollided = false;
         this.potDeactivated = false;
         this.explodePotKeyFrame = 0;
+        this.powerUpWidth = 44;
+        this.powerUpHeight = 44;
         this.explositionWidth = 256;
         this.explositionHeight = 341;
+        this.explosionSound = Math.floor(Math.random() * (8 - 5)) + 5;
     }
     drawNains(context, platform) {
         let spriteSheetRowNumber;
@@ -263,8 +273,9 @@ class Character {
                     }
                     const rectangle1 = { x: this.potx, y: this.poty - this.verticalShift * this.potHeight, width: this.width, height: this.height };
                     const rectangle2 = { x: platform.x, y: platform.y, width: platform.width, height: platform.height };
-                    if (!this.potDeactivated)
+                    if (!this.potDeactivated) {
                         this.potCollided = detectRectangleCollision(rectangle1, rectangle2);
+                    }
                     spriteSheetRowNumber = 4;
                     context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
                     if (!this.potCollided) {
@@ -272,13 +283,13 @@ class Character {
                         this.poty += this.potV * Math.sin(this.angle);
                         this.potV *= 1.01;
                         context.drawImage(this.nainsImage, this.potNumber * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height);
-                        this.explodePotKeyFrame = 0;
-                        console.log('fire');
                     }
                     else {
+                        if (!this.potDeactivated) {
+                            platform.shake.shake = 1;
+                            SoundEffect(this.explosionSound);
+                        }
                         this.potDeactivated = true;
-                        this.explodePotKeyFrame === 1 ? platform.shake.shake = 1 : '';
-                        this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : '';
                     }
                     if (lastTime - this.spawn > 15000) {
                         this.spawn = lastTime;
@@ -286,6 +297,7 @@ class Character {
                         this.poty = 1;
                         this.potV = 10;
                         this.potDeactivated = false;
+                        this.explodePotKeyFrame = 0;
                     }
                 }
                 else if (lastTime - this.spawn > 5000) {
@@ -304,8 +316,20 @@ class Character {
             }
         }
         else {
+            if (this.nainsBounceCount > 2) {
+                this.nainsWidthOnScreenX *= 0.95;
+                this.nainsWidthOnScreenY *= 0.95;
+                if (this.vy - this.force < 0) {
+                    this.showPowerUp = true;
+                    this.force *= this.damping;
+                    console.log('velocity zero');
+                }
+            }
+            if (this.nainsBounceCount > 3)
+                this.canSpawn = false;
+            this.canSpawn && this.showPowerUp && context.drawImage(this.powerUpImage, this.powerUp * this.powerUpWidth, 0, this.powerUpWidth, this.powerUpHeight, this.x, this.y - this.powerUpHeight, this.powerUpWidth, this.powerUpHeight);
             spriteSheetRowNumber = 6;
-            this.canSpawn && context.drawImage(this.nainsImage, this.frameNains * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            this.canSpawn && !this.showPowerUp && context.drawImage(this.nainsImage, this.frameNains * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.nainsWidthOnScreenX, this.nainsWidthOnScreenY);
             this.frameNains < 14 ? this.frameNains += 1 : this.frameNains = 0;
             if (this.vy - this.force > 0) {
                 this.vy *= 1.02;
@@ -317,8 +341,10 @@ class Character {
         }
     }
     explode(context) {
-        if (this.potCollided && lastTime - this.spawn > 8000 && !this.fall)
+        if (this.potCollided && lastTime - this.spawn > 8000 && !this.fall) {
             context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight);
+            this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : '';
+        }
     }
     bounceNaine(rectangle1, rectangle2) {
         if (!this.fall || !this.canSpawn || lastTime - this.lastCollision < 100)
@@ -327,6 +353,7 @@ class Character {
             this.force *= this.vy * 0.53;
             this.vy = 2;
             this.lastCollision = lastTime;
+            this.nainsBounceCount++;
             return true;
         }
         return false;
