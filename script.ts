@@ -1,5 +1,5 @@
 import { Move as controls } from './controls.js'
-import { gameOver, restartGame, startGame, startBtn } from './ui.js'
+import { gameOver as gameOverUI, restartGame, startGame, startBtn } from './ui.js'
 import { SoundEffect, soundsArrayLength } from './soundManager.js'
 
 const canvas = document.querySelector('canvas')!
@@ -7,13 +7,17 @@ const ctx = canvas.getContext('2d')!
 canvas.width = Math.min(document.documentElement.clientWidth, 610)
 canvas.height = document.documentElement.clientHeight - 20
 ctx.strokeStyle = 'white'
+ctx.font = `24px Arial`
 
 const fps = 30 // Frames per second
 const frameTime = 1000 / fps // frameTime between frames in milliseconds
 let lastTime = 0
 let deltaTime = 0
 let lastCollisionTime = 0
-
+let score = 0
+let lives = 3
+let gunActive = true
+let gameOver = false
 let requestAnimationFrameRef: number
 
 // add resize event handler here
@@ -35,8 +39,8 @@ class Ball {
     constructor(effect: Effect) {
         this.effect = effect
         this.radius = 8
-        this.x = 20
-        this.y = this.effect.height - 40
+        this.x = 50
+        this.y = this.effect.height - 80
         this.vx = Math.random() * 5 - 2
         this.vy = -5
         this.friction = 0.98
@@ -94,8 +98,9 @@ class Ball {
 
         // end game
         if ((this.y + this.radius) > this.effect.height + 18) {
-            cancelAnimationFrame(requestAnimationFrameRef)
-            gameOver.classList.add('activate')
+            gameOverUI.classList.add('activate')
+            gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef) }, 200)
+            gameOver = true
         }
 
         this.x += this.vx
@@ -116,8 +121,7 @@ class Effect {
     noOfTilesPerRow: number;
     noOfRows: number;
     tileAdjustment: number;
-    inactiveTiles: number;
-
+    statsBoard: StatsBoard;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas
@@ -129,8 +133,7 @@ class Effect {
         this.noOfTilesPerRow = Math.floor(this.width / (Tile.width))
         this.noOfRows = 3
         this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width + Tile.gap) * 0.5
-        this.inactiveTiles = 0
-
+        this.statsBoard = new StatsBoard(this.canvas, 0, this.height - 40)
         this.createParticle()
     }
 
@@ -145,9 +148,7 @@ class Effect {
     handleParticles(context: CanvasRenderingContext2D) {
         this.tiles.forEach((tile, index) => {
             tile.draw(context, this.platform)
-            const shouldDeactivate = tile.deactivateBall(this.ball)
-            this.inactiveTiles += shouldDeactivate
-            if (shouldDeactivate === 1) this.cleanUp(index)
+            if (tile.deativateTile(this.ball)) this.cleanUp(index)
             const rectangle1 = { x: tile.nains.x, y: tile.nains.y, width: tile.nains.width, height: tile.nains.height - tile.nains.verticalShift } // zero since height was originally shifted 25 px
             const rectangle2 = { x: this.platform.x, y: this.platform.y, width: this.platform.width, height: this.platform.height }
 
@@ -155,29 +156,37 @@ class Effect {
                 this.platform.shake.shake = 1
                 this.cleanUp(index)
             }
+            if(tile.nains.y > canvas.height) this.tiles = this.tiles.filter(tile=>!tile.deactivate)
         })
         this.ball.draw(context)
         this.ball.update(this.platform)
         this.platform.draw(context)
 
+        this.statsBoard.draw(context)
         this.tiles.forEach(tile => {
-            // tile.nains.explode(context)
+            tile.nains.explode(context)
+            this.platform.bullet.forEach(bullet=>bullet.deactivateBullet(tile))
         })
 
-        if (this.inactiveTiles === this.noOfTilesPerRow * this.noOfRows) {
+        if (this.tiles.length === 0) {
+            Array.from(document.querySelectorAll('.score .score-count')).forEach(ui => ui.innerHTML = score.toString())
             restartGame.classList.add('activate')
-            cancelAnimationFrame(requestAnimationFrameRef)
+            gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef) }, 200)
+            gameOver = true
         }
+
     }
 
     cleanUp(index: number) {
         const tile = this.tiles[index]
         if (!tile) return
-        if ((tile.deactivate && !tile.nains.canSpawn) || (tile.nains.canSpawn && tile.nains.y > this.canvas.height + 50)) {
-            const temp = [...this.tiles]
-            temp.splice(index, 1)
-            this.tiles = temp
-        }
+        if(tile.nains.fall) return
+        // if ((tile.deactivate && !tile.nains.canSpawn) || (tile.nains.canSpawn && tile.nains.y > this.canvas.height + 50)) {
+        //     const temp = [...this.tiles]
+        //     temp.splice(index, 1)
+        //     this.tiles = temp
+        // }
+        this.tiles = this.tiles.filter(tile=>!tile.deactivate)
     }
 
 }
@@ -195,6 +204,8 @@ class Platform {
     bounceFactor: number;
     color: string;
     shake: ShakeOnHit
+    bullet: Bullet[]
+    bulletOffset: number
 
     constructor(canvas: HTMLCanvasElement, x: number, bounce: number, color: string) {
         this.canvas = canvas
@@ -203,17 +214,28 @@ class Platform {
         this.height = 20
         this.width = 80
         this.x = x
-        this.y = this.canvasHeight - this.height - 10
+        this.y = this.canvasHeight - 70
         this.platformHitPanelty = 0.6
         this.radius = 4
         this.bounceFactor = bounce
         this.color = color
         this.shake = new ShakeOnHit()
+        this.bullet = []
+        this.bulletOffset = 10
     }
+
     draw(context: CanvasRenderingContext2D) {
         // controls
         if (this.shake.shake < this.platformHitPanelty && this.x - 10 * controls.x > 0 && this.x + this.width - 10 * controls.x < this.canvasWidth)
             this.x -= 10 * controls.x
+
+        // draw bullets
+        this.bullet.forEach(bullet => {
+            bullet.draw(context)
+            if (bullet.y < -20) {
+                bullet.deactive = true
+            }
+        })
 
         context.fillStyle = this.color
         this.shake.vibrate()
@@ -225,10 +247,58 @@ class Platform {
         context.arcTo(this.x + this.shake.vibrateX, this.y + this.shake.vibrateY + this.height, this.x + this.shake.vibrateX, this.y + this.shake.vibrateY, this.radius);
         context.arcTo(this.x + this.shake.vibrateX, this.y + this.shake.vibrateY, this.x + this.shake.vibrateX + this.width, this.y + this.shake.vibrateY, this.radius);
         context.closePath();
+        gunActive && context.arc(this.x + this.shake.vibrateX + this.bulletOffset, this.y + this.shake.vibrateY, 5, Math.PI, 2 * Math.PI)
+        gunActive && context.arc(this.x + this.shake.vibrateX + this.width - this.bulletOffset, this.y + this.shake.vibrateY, 5, Math.PI, 2 * Math.PI)
         context.fill();
 
         this.shake.runEveryFrame()
+
+        this.bulletCleanUp()
     }
+
+    bulletCleanUp() {
+        this.bullet = this.bullet.filter(bullet => !bullet.deactive)
+    }
+}
+
+class Bullet {
+    x: number;
+    y: number;
+    vy: number;
+    length: number;
+    deactive: boolean;
+
+    constructor(x: number, y: number) {
+        this.x = x
+        this.y = y
+        this.vy = 7
+        this.length = 5
+        this.deactive = false
+    }
+
+    draw(context: CanvasRenderingContext2D) {
+        if(this.deactive) return
+        context.beginPath()
+        context.moveTo(this.x, this.y)
+        context.lineTo(this.x, this.y + this.length)
+        context.strokeStyle = 'white'
+        context.stroke()
+        this.y -= this.vy
+    }
+
+    deactivateBullet(tile: Tile) {
+        if(!tile.deactivate && this.x > tile.x && this.x < tile.x + tile.effectiveWidth && this.y < tile.y+tile.effectiveHeight){
+            this.deactive = true
+            tile.deactivate = true
+            score++
+            if (tile.shouldDrawNains) {
+                tile.nains.fall = true
+                tile.nains.force = 5
+                tile.nains.vy = 2
+            }
+        }
+    }
+
 }
 
 class Tile {
@@ -255,7 +325,7 @@ class Tile {
         this.effectiveHeight = Tile.height - Tile.gap
         this.soundTrack = Math.floor(Math.random() * 3)
         this.nains = new Character(this.x + 5, this.y)
-        this.shouldDrawNains = spawn && Math.floor(Math.random() * 20) === 1 ? true : false
+        this.shouldDrawNains = spawn && Math.floor(Math.random() * 4) === 1 ? true : false
         this.lastCollisionTime = 0
     }
 
@@ -269,7 +339,7 @@ class Tile {
 
     }
 
-    deactivateBall(ball: Ball) {
+    deativateTile(ball: Ball):boolean {
 
         const circle = { x: ball.x, y: ball.y, radius: ball.radius }
         const rectangle = { x: this.x, y: this.y, width: this.effectiveWidth, height: this.effectiveHeight }
@@ -280,18 +350,23 @@ class Tile {
             if (!ball.rocketMode) {
                 ball.vy *= -1
             }
-
+            score++
             SoundEffect(this.soundTrack)
+
+            if (score !== 0 && score % 8 === 0 && ball.vy < 10) {
+                ball.vy *= 1.1
+            }
+
             if (this.shouldDrawNains) {
                 this.nains.fall = true
                 this.nains.force = 5
                 this.nains.vy = 2
             }
             this.lastCollisionTime = lastTime
-            return 1
+            return true
         }
         else
-            return 0
+            return false
     }
 }
 
@@ -438,6 +513,13 @@ class Character {
                         if (!this.potDeactivated) {
                             platform.shake.shake = 1
                             SoundEffect(this.explosionSound)
+                            lives--
+                            if (lives === 0) {
+                                Array.from(document.querySelectorAll('.score .score-count')).forEach(ui => ui.innerHTML = score.toString())
+                                gameOverUI.classList.add('activate')
+                                gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef) }, 800)
+                                gameOver = true
+                            }
                         }
 
                         // context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight)
@@ -492,7 +574,7 @@ class Character {
             this.canSpawn && this.showPowerUp && context.drawImage(this.powerUpImage, this.powerUp * this.powerUpWidth, 0, this.powerUpWidth, this.powerUpHeight, this.x, this.y - this.powerUpHeight, this.powerUpWidth, this.powerUpHeight)
 
             spriteSheetRowNumber = 6
-            this.canSpawn && !this.showPowerUp && context.drawImage(this.nainsImage, this.frameNains * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.nainsWidthOnScreenX, this.nainsWidthOnScreenY)
+            this.canSpawn && !this.showPowerUp && context.drawImage(this.nainsImage, Math.floor(this.frameNains * this.width), spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.nainsWidthOnScreenX, this.nainsWidthOnScreenY)
             this.frameNains < 14 ? this.frameNains += 1 : this.frameNains = 0
 
             if (this.vy - this.force > 0) {
@@ -526,6 +608,38 @@ class Character {
     }
 }
 
+class StatsBoard {
+    x: number;
+    y: number;
+    offsetX: number;
+    offsetY: number;
+    height: number;
+    width: number;
+    color: string;
+    textColor: string;
+
+    constructor(canvas: HTMLCanvasElement, x: number, y: number) {
+        this.x = x
+        this.y = y
+        this.offsetX = 5
+        this.offsetY = 15
+        this.height = 40
+        this.width = canvas.width
+        this.color = 'hsl(240,40%,50%)'
+        this.textColor = 'hsl(0,0%,0%)'
+    }
+
+    draw(context: CanvasRenderingContext2D) {
+        context.fillStyle = this.color
+        context.fillRect(this.x, this.y, this.width, this.height)
+        const scoreText = `Coins:- ${score}`
+        const livesText = `Health:- ${lives}`
+        context.fillStyle = this.textColor
+        context.fillText(scoreText, this.x + this.offsetX, this.y + this.offsetY + 15)
+        context.fillText(livesText, this.width - 110, this.y + this.offsetY + 15)
+    }
+}
+
 let effect = new Effect(canvas)
 
 function animation(currentTime: number) {
@@ -543,14 +657,15 @@ function animation(currentTime: number) {
 
 // requestAnimationFrameRef = requestAnimationFrame(animation)
 
-startBtn.addEventListener('click', () => {
+startBtn.addEventListener('click', (e) => {
+    e.stopPropagation()
     startGame.classList.remove('activate')
     animation(0)
 })
 
 
 function detectCollision(circle: ICircleCollisionProps, rectangle: IRectangleCollisionProps): boolean {
-    if (lastTime - lastCollisionTime < 20) return false
+    if (lastTime - lastCollisionTime < 20) return false // helps prevent double collision
     if (circle.x + circle.radius > rectangle.x && circle.x - circle.radius < rectangle.x + rectangle.width && circle.y + circle.radius > rectangle.y && circle.y - circle.radius < rectangle.y + rectangle.height) {
         lastCollisionTime = lastTime
         return true
@@ -560,7 +675,7 @@ function detectCollision(circle: ICircleCollisionProps, rectangle: IRectangleCol
 
 
 function detectRectangleCollision(rectangle1: IRectangleCollisionProps, rectangle2: IRectangleCollisionProps): boolean {
-    if (lastTime - lastCollisionTime < 20) return false
+    if (lastTime - lastCollisionTime < 20) return false // helps prevent double collision
     if (rectangle1.x + rectangle1.width > rectangle2.x && rectangle1.x < rectangle2.x + rectangle2.width && rectangle1.y + rectangle1.height > rectangle2.y && rectangle1.y < rectangle2.y + rectangle2.height) {
         lastCollisionTime = lastTime
         return true
@@ -581,14 +696,17 @@ document.addEventListener('powerUpEvent', ({ detail }: IPowerUpEventProps) => {
         case 0:
             //power.number = 0
             //power.type = 'guns'
+            gunActive = true
             break;
         case 1:
             //power.number = 1
             //power.type = 'life++'
+            lives++
             break;
         case 2:
             //power.number = 2
             //power.type = 'money'
+            score += 100
             break;
         case 3:
             //power.number = 3
@@ -628,4 +746,14 @@ document.addEventListener('powerUpEvent', ({ detail }: IPowerUpEventProps) => {
             //power.type = ''
             break;
     }
+})
+
+document.addEventListener('click', () => {
+    if (!gunActive) return
+    const bulletOffset = effect.platform.bulletOffset
+    const x = effect.platform.x + bulletOffset
+    const y = effect.platform.y
+    const x2 = effect.platform.x + effect.platform.width - bulletOffset
+    effect.platform.bullet.push(new Bullet(x, y))
+    effect.platform.bullet.push(new Bullet(x2, y))
 })

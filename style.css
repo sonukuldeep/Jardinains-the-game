@@ -58,7 +58,6 @@ canvas {
     align-items: center;
 }
 
-
 @media (width < 768px) {
     canvas {
         outline: none;
