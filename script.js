@@ -17,6 +17,7 @@ let lives = 3;
 let gunActive = true;
 let gameOver = false;
 let requestAnimationFrameRef;
+let lastCollisionID;
 const PowerUpEvent = new CustomEvent('powerUpEvent', { detail: { power: { type: '', number: -1 } } });
 class Ball {
     constructor(effect) {
@@ -120,7 +121,6 @@ class Effect {
         this.platform.draw(context);
         this.statsBoard.draw(context);
         this.tiles.forEach(tile => {
-            tile.nains.explode(context);
             this.platform.bullet.forEach(bullet => bullet.deactivateBullet(tile));
         });
         if (this.tiles.length === 0) {
@@ -134,9 +134,6 @@ class Effect {
         const tile = this.tiles[index];
         if (!tile)
             return;
-        if (tile.nains.fall)
-            return;
-        this.tiles = this.tiles.filter(tile => !tile.deactivate);
     }
 }
 class Platform {
@@ -208,7 +205,9 @@ class Bullet {
             tile.deactivate = true;
             score++;
             if (tile.shouldDrawNains) {
-                tile.nains.fall = true;
+                if (tile.nains.nainsIsPresent) {
+                    tile.nains.shouldNainsFall = true;
+                }
                 tile.nains.force = 5;
                 tile.nains.vy = 2;
             }
@@ -240,7 +239,6 @@ class Tile {
         const rectangle = { x: this.x, y: this.y, width: this.effectiveWidth, height: this.effectiveHeight };
         if (!this.deactivate && detectCollision(circle, rectangle)) {
             this.deactivate = true;
-            this.deactivate = true;
             if (!ball.rocketMode) {
                 ball.vy *= -1;
             }
@@ -250,7 +248,9 @@ class Tile {
                 ball.vy *= 1.1;
             }
             if (this.shouldDrawNains) {
-                this.nains.fall = true;
+                if (this.nains.nainsIsPresent) {
+                    this.nains.shouldNainsFall = true;
+                }
                 this.nains.force = 5;
                 this.nains.vy = 2;
             }
@@ -284,147 +284,155 @@ class ShakeOnHit {
         this.switch *= -1;
     }
 }
+class Pot {
+    constructor(x, y) {
+        this.potNumber = Math.floor(Math.random() * (13 - 9)) + 9;
+        this.x = x;
+        this.y = y;
+        this.potHeight = 24;
+        this.potWidth = 24;
+        this.angle = 0;
+        this.potx = 0;
+        this.poty = 0;
+        this.potV = 10;
+        this.potIsActive = false;
+        this.explodePotKeyFrame = 0;
+        this.potCollided = false;
+        this.pot = document.querySelector('#character .character');
+        this.explosionImage = document.querySelector('#character .explosion');
+        this.explositionWidth = 256;
+        this.explositionHeight = 341;
+        this.explosionSound = Math.floor(Math.random() * (8 - 5)) + 5;
+        this.verticalShift = 25;
+        this.spriteSheetRowNumber = 4;
+    }
+    explode(context) {
+        if (!this.potCollided)
+            return;
+        context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight);
+        this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : '';
+    }
+    draw(context, platform) {
+        if (!this.potIsActive)
+            return;
+        const rectangle1 = { x: this.potx, y: this.poty - this.verticalShift * this.potHeight, width: this.potWidth, height: this.potHeight };
+        const rectangle2 = { x: platform.x, y: platform.y, width: platform.width, height: platform.height };
+        this.potCollided = detectRectangleCollision(rectangle1, rectangle2);
+        if (!this.potCollided) {
+            this.potx += this.potV * Math.cos(this.angle);
+            this.poty += this.potV * Math.sin(this.angle);
+            this.potV *= 1.01;
+            context.drawImage(this.pot, this.potNumber * this.potWidth, this.spriteSheetRowNumber * this.potHeight, this.potWidth, this.potHeight, this.x, this.y - this.verticalShift * this.potHeight, this.potWidth, this.potHeight);
+        }
+        else {
+            if (!this.potIsActive) {
+                platform.shake.shake = 1;
+                SoundEffect(this.explosionSound);
+                lives--;
+                if (lives === 0) {
+                    Array.from(document.querySelectorAll('.score .score-count')).forEach(ui => ui.innerHTML = score.toString());
+                    gameOverUI.classList.add('activate');
+                    gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef); }, 800);
+                    gameOver = true;
+                }
+            }
+            this.potIsActive = true;
+        }
+    }
+}
 class Character {
     constructor(x, y) {
         this.x = x;
+        this.y = y;
         this.width = 24 + 1;
         this.height = 24 + 1;
-        this.y = y;
         this.vx = 0;
         this.vy = 0;
         this.force = 0;
         this.damping = 0.98;
         this.nainsImage = document.querySelector('#character .character');
-        this.explosionImage = document.querySelector('#character .explosion');
         this.powerUpImage = document.querySelector('#character .power-up');
+        this.nainsIdea = Math.floor(Math.random() * 8);
+        this.nainsFall = 0;
+        this.nainsAim = 1;
+        this.nainsCloseEye = 0;
         this.nainsBounceCount = 0;
-        this.frameNains = Math.floor(Math.random() * 8);
         this.nainsWidthOnScreenX = this.width;
         this.nainsWidthOnScreenY = this.height;
         this.verticalShift = 25;
-        this.fall = false;
-        this.showPowerUp = false;
-        this.spawn = Math.floor(Math.random() * (12000 - 10000)) + 10000;
+        this.spawnAt = Math.floor(Math.random() * (12000 - 10000)) + 10000;
         this.powerUp = Math.floor(Math.random() * 9);
-        this.canSpawn = false;
         this.lastCollision = 0;
-        this.potNumber = Math.floor(Math.random() * (13 - 9)) + 9;
-        this.potHeight = 1.7;
-        this.angle = 0;
-        this.potx = 1;
-        this.poty = 1;
-        this.potV = 10;
-        this.potCollided = false;
-        this.potDeactivated = false;
-        this.explodePotKeyFrame = 0;
         this.powerUpWidth = 44;
         this.powerUpHeight = 44;
         this.powerUpShowAt = 3;
-        this.explositionWidth = 256;
-        this.explositionHeight = 341;
-        this.explosionSound = Math.floor(Math.random() * (8 - 5)) + 5;
+        this.time = (Math.random() * 10000) + lastTime + 10000;
+        this.nainsIsPresent = false;
+        this.shouldNainsFall = false;
+        this.showPowerUp = false;
+        this.id = crypto.randomUUID();
+        this.runOnce = false;
+        this.nainsFrame = 0;
     }
     drawNains(context, platform) {
-        let spriteSheetRowNumber;
-        if (!this.fall) {
-            if (lastTime > this.spawn) {
-                if (lastTime - this.spawn > 8000) {
-                    if (this.potx === 1 && this.poty === 1) {
-                        this.angle = Math.atan2(platform.y - this.y + this.verticalShift * this.potHeight, (platform.x + platform.width * 0.5) - this.x);
-                        this.potx = this.x;
-                        this.poty = this.y;
-                    }
-                    const rectangle1 = { x: this.potx, y: this.poty - this.verticalShift * this.potHeight, width: this.width, height: this.height };
-                    const rectangle2 = { x: platform.x, y: platform.y, width: platform.width, height: platform.height };
-                    if (!this.potDeactivated) {
-                        this.potCollided = detectRectangleCollision(rectangle1, rectangle2);
-                    }
-                    spriteSheetRowNumber = 4;
-                    context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
-                    if (!this.potCollided) {
-                        this.potx += this.potV * Math.cos(this.angle);
-                        this.poty += this.potV * Math.sin(this.angle);
-                        this.potV *= 1.01;
-                        context.drawImage(this.nainsImage, this.potNumber * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.potx, this.poty - this.verticalShift * this.potHeight, this.width, this.height);
-                    }
-                    else {
-                        if (!this.potDeactivated) {
-                            platform.shake.shake = 1;
-                            SoundEffect(this.explosionSound);
-                            lives--;
-                            if (lives === 0) {
-                                Array.from(document.querySelectorAll('.score .score-count')).forEach(ui => ui.innerHTML = score.toString());
-                                gameOverUI.classList.add('activate');
-                                gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef); }, 800);
-                                gameOver = true;
-                            }
-                        }
-                        this.potDeactivated = true;
-                    }
-                    if (lastTime - this.spawn > 15000) {
-                        this.spawn = lastTime;
-                        this.potx = 1;
-                        this.poty = 1;
-                        this.potV = 10;
-                        this.potDeactivated = false;
-                        this.explodePotKeyFrame = 0;
-                    }
-                }
-                else if (lastTime - this.spawn > 5000) {
-                    this.frameNains = 1;
-                    spriteSheetRowNumber = 2;
-                    context.drawImage(this.nainsImage, this.frameNains * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
-                    spriteSheetRowNumber = 4;
-                    context.drawImage(this.nainsImage, this.potNumber * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift * this.potHeight, this.width, this.height);
-                }
-                else {
-                    spriteSheetRowNumber = 0;
-                    context.drawImage(this.nainsImage, Math.floor(this.frameNains) * this.width, spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
-                }
-                this.frameNains < 8 ? this.frameNains += 0.35 : this.frameNains = 0;
-                this.canSpawn = true;
-            }
-        }
-        else {
-            if (this.nainsBounceCount > this.powerUpShowAt) {
-                this.nainsWidthOnScreenX *= 0.95;
-                this.nainsWidthOnScreenY *= 0.95;
-                if (this.vy - this.force < 0) {
-                    this.showPowerUp = true;
-                    this.force *= this.damping;
-                }
-            }
-            if (this.nainsBounceCount > this.powerUpShowAt + 1) {
-                this.canSpawn = false;
-            }
-            this.canSpawn && this.showPowerUp && context.drawImage(this.powerUpImage, this.powerUp * this.powerUpWidth, 0, this.powerUpWidth, this.powerUpHeight, this.x, this.y - this.powerUpHeight, this.powerUpWidth, this.powerUpHeight);
-            spriteSheetRowNumber = 6;
-            this.canSpawn && !this.showPowerUp && context.drawImage(this.nainsImage, Math.floor(this.frameNains * this.width), spriteSheetRowNumber * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.nainsWidthOnScreenX, this.nainsWidthOnScreenY);
-            this.frameNains < 14 ? this.frameNains += 1 : this.frameNains = 0;
-            if (this.vy - this.force > 0) {
-                this.vy *= 1.02;
-            }
-            else {
+        if (this.nainsBounceCount > this.powerUpShowAt) {
+            this.nainsWidthOnScreenX *= 0.95;
+            this.nainsWidthOnScreenY *= 0.95;
+            if (this.vy - this.force < 0) {
+                this.showPowerUp = true;
+                this.shouldNainsFall = false;
                 this.force *= this.damping;
             }
-            this.y += this.vy - this.force;
         }
-    }
-    explode(context) {
-        if (this.potCollided && lastTime - this.spawn > 8000 && !this.fall) {
-            context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight);
-            this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : '';
+        if (lastTime - this.time > 0 && !this.runOnce) {
+            this.runOnce = true;
+            this.nainsIsPresent = true;
         }
+        if (this.nainsIsPresent && !this.shouldNainsFall && !this.showPowerUp) {
+            if (this.nainsFrame >= 0 && this.nainsFrame < 200)
+                context.drawImage(this.nainsImage, Math.floor(this.nainsIdea) * this.width, 0, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            else if (this.nainsFrame >= 200 && this.nainsFrame <= 400)
+                context.drawImage(this.nainsImage, Math.floor(this.nainsIdea) * this.width, 4 * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            else {
+                context.drawImage(this.nainsImage, 1 * this.width, 2 * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            }
+            if (this.nainsIdea > 8)
+                this.nainsIdea = 0;
+            else
+                this.nainsIdea += 0.3;
+            this.nainsFrame < 600 ? this.nainsFrame++ : this.nainsFrame = 0;
+        }
+        else if (this.nainsIsPresent && this.shouldNainsFall && !this.showPowerUp) {
+            context.drawImage(this.nainsImage, Math.floor(this.nainsFall) * this.width, 6 * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            if (this.nainsFall > 14)
+                this.nainsFall = 0;
+            else
+                this.nainsFall += 0.3;
+        }
+        else if (this.nainsIsPresent && !this.shouldNainsFall && this.showPowerUp) {
+            context.drawImage(this.powerUpImage, this.powerUp * this.powerUpWidth, 0, this.powerUpWidth, this.powerUpHeight, this.x - this.powerUpWidth / 4, this.y - this.verticalShift, this.powerUpWidth, this.powerUpHeight);
+        }
+        if (this.vy - this.force > 0) {
+            this.vy *= 1.02;
+        }
+        else {
+            this.force *= this.damping;
+        }
+        this.y += this.vy - this.force;
     }
     bounceNaine(rectangle1, rectangle2) {
-        if (!this.fall || !this.canSpawn || lastTime - this.lastCollision < 100)
+        if (!this.nainsIsPresent)
             return false;
         if (detectRectangleCollision(rectangle1, rectangle2)) {
+            if (this.nainsBounceCount > this.powerUpShowAt) {
+                powerUpManager(this.powerUp);
+                this.nainsIsPresent = false;
+                return false;
+            }
             this.force *= this.vy * 0.53;
             this.vy = 2;
-            this.lastCollision = lastTime;
             this.nainsBounceCount++;
-            this.nainsBounceCount > this.powerUpShowAt + 1 && powerUpManager(this.powerUp);
+            this.lastCollision = lastTime;
             return true;
         }
         return false;
