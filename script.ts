@@ -123,6 +123,7 @@ class Effect {
     noOfRows: number;
     tileAdjustment: number;
     statsBoard: StatsBoard;
+    characters: Character[];
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas
@@ -135,6 +136,7 @@ class Effect {
         this.noOfRows = 3
         this.tileAdjustment = (this.width - this.noOfTilesPerRow * Tile.width + Tile.gap) * 0.5
         this.statsBoard = new StatsBoard(this.canvas, 0, this.height - 40)
+        this.characters = []
         this.createParticle()
     }
 
@@ -145,49 +147,57 @@ class Effect {
                 this.tiles.push(new Tile(Tile.width * j + this.tileAdjustment, Tile.height * i, spawnCharaterOnFirstRow))
             }
         }
+        this.tiles.forEach(tile => {
+            this.characters.push(new Character(tile.x + 5, tile.y))
+        })
     }
     handleParticles(context: CanvasRenderingContext2D) {
         this.tiles.forEach((tile, index) => {
             tile.draw(context, this.platform)
-            if (tile.deativateTile(this.ball)) this.cleanUp(index)
-            const rectangle1 = { x: tile.nains.x, y: tile.nains.y, width: tile.nains.width, height: tile.nains.height - tile.nains.verticalShift } // zero since height was originally shifted 25 px
-            const rectangle2 = { x: this.platform.x, y: this.platform.y, width: this.platform.width, height: this.platform.height }
+            const nain = this.characters[index]
+            tile.deativateTile(this.ball, nain)
 
-            if (tile.nains.bounceNaine(rectangle1, rectangle2)) {
-                this.platform.shake.shake = 1
-                this.cleanUp(index)
+            if (tile.shouldDrawNains) {
+                if (!tile.deactivate)
+                    nain.setUp()
+
+                nain.drawNains(context, this.platform)
+                if (nain.nainsIsPresent) {
+                    const rectangle1 = { x: nain.x, y: nain.y, width: nain.width, height: nain.height - nain.verticalShift } // zero since height was originally shifted 25 px
+                    const rectangle2 = { x: this.platform.x, y: this.platform.y, width: this.platform.width, height: this.platform.height }
+
+                    if (nain.bounceNaine(rectangle1, rectangle2)) {
+                        this.platform.shake.shake = 1
+                    }
+                }
+
             }
-            if (tile.nains.y > canvas.height) this.tiles = this.tiles.filter(tile => !tile.deactivate)
+            this.platform.bullet.forEach(bullet => bullet.deactivateBullet(tile, nain))
         })
+
         this.ball.draw(context)
         this.ball.update(this.platform)
         this.platform.draw(context)
-
         this.statsBoard.draw(context)
-        this.tiles.forEach(tile => {
-            // tile.nains.explode(context)
-            this.platform.bullet.forEach(bullet => bullet.deactivateBullet(tile))
-        })
 
+
+        // game over logic
         if (this.tiles.length === 0) {
             Array.from(document.querySelectorAll('.score .score-count')).forEach(ui => ui.innerHTML = score.toString())
             restartGame.classList.add('activate')
             gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef) }, 200)
             gameOver = true
+            this.characters.forEach(nains=>{
+                if(nains.y > canvas.height/2){
+                    console.log('nains')
+                }
+            })
         }
 
     }
 
-    cleanUp(index: number) {
-        const tile = this.tiles[index]
-        if (!tile) return
-        // if (tile.nains.platformIsPresent) return
-        // if ((tile.deactivate && !tile.nains.canSpawn) || (tile.nains.canSpawn && tile.nains.y > this.canvas.height + 50)) {
-        //     const temp = [...this.tiles]
-        //     temp.splice(index, 1)
-        //     this.tiles = temp
-        // }
-        // this.tiles = this.tiles.filter(tile => !tile.deactivate)
+    cleanUp() {
+        this.tiles = this.tiles.filter(tile => !tile.deactivate)
     }
 
 }
@@ -286,17 +296,17 @@ class Bullet {
         this.y -= this.vy
     }
 
-    deactivateBullet(tile: Tile) {
+    deactivateBullet(tile: Tile, nain: Character) {
         if (!tile.deactivate && this.x > tile.x && this.x < tile.x + tile.effectiveWidth && this.y < tile.y + tile.effectiveHeight) {
             this.deactive = true
             tile.deactivate = true
             score++
             if (tile.shouldDrawNains) {
-                if (tile.nains.nainsIsPresent) {
-                    tile.nains.shouldNainsFall = true
+                if (nain.nainsIsPresent) {
+                    nain.shouldNainsFall = true
                 }
-                tile.nains.force = 5
-                tile.nains.vy = 2
+                nain.force = 5
+                nain.vy = 2
             }
         }
     }
@@ -311,7 +321,6 @@ class Tile {
     effectiveWidth: number;
     effectiveHeight: number;
     soundTrack: number;
-    nains: Character;
     shouldDrawNains: boolean;
     lastCollisionTime: number;
     static width = 40
@@ -326,7 +335,6 @@ class Tile {
         this.effectiveWidth = Tile.width - Tile.gap
         this.effectiveHeight = Tile.height - Tile.gap
         this.soundTrack = Math.floor(Math.random() * 3)
-        this.nains = new Character(this.x + 5, this.y)
         this.shouldDrawNains = spawn && Math.floor(Math.random() * 4) === 1 ? true : false
         this.lastCollisionTime = 0
     }
@@ -335,13 +343,9 @@ class Tile {
         context.fillStyle = this.color
         !this.deactivate && context.fillRect(this.x, this.y, this.effectiveWidth, this.effectiveHeight)
 
-        if (this.shouldDrawNains) {
-            this.nains.drawNains(context, platform)
-        }
-
     }
 
-    deativateTile(ball: Ball): boolean {
+    deativateTile(ball: Ball, nain: Character) {
 
         const circle = { x: ball.x, y: ball.y, radius: ball.radius }
         const rectangle = { x: this.x, y: this.y, width: this.effectiveWidth, height: this.effectiveHeight }
@@ -359,17 +363,16 @@ class Tile {
             }
 
             if (this.shouldDrawNains) {
-                if (this.nains.nainsIsPresent) {
-                    this.nains.shouldNainsFall = true
+                if (nain.nainsIsPresent) {
+                    nain.shouldNainsFall = true
                 }
-                this.nains.force = 5
-                this.nains.vy = 2
+                nain.force = 5
+                nain.vy = 2
             }
             this.lastCollisionTime = lastTime
-            return true
+
         }
-        else
-            return false
+
     }
 }
 
@@ -452,6 +455,7 @@ class Pot {
 
     draw(context: CanvasRenderingContext2D, platform: Platform) {
 
+        context.drawImage(this.pot, 0, 0, this.potWidth, this.potHeight, this.x, this.y, this.potWidth, this.potHeight)
         if (!this.potIsActive) return
 
         const rectangle1: IRectangleCollisionProps = { x: this.potx, y: this.poty - this.verticalShift * this.potHeight, width: this.potWidth, height: this.potHeight }
@@ -515,6 +519,7 @@ class Character {
     id: string;
     runOnce: boolean;
     nainsFrame: number;
+    pot: Pot;
 
     constructor(x: number, y: number) {
         this.x = x
@@ -548,8 +553,16 @@ class Character {
         this.id = crypto.randomUUID()
         this.runOnce = false
         this.nainsFrame = 0
+        this.pot = new Pot(this.x,this.y)
     }
 
+    setUp() {
+        // set up
+        if (lastTime - this.time > 0 && !this.runOnce) {
+            this.nainsIsPresent = true
+            this.runOnce = true
+        }
+    }
 
     drawNains(context: CanvasRenderingContext2D, platform: Platform) {
 
@@ -565,12 +578,6 @@ class Character {
 
         }
 
-        // set up
-        if (lastTime - this.time > 0 && !this.runOnce) {
-            this.runOnce = true
-            this.nainsIsPresent = true
-        }
-
 
         if (this.nainsIsPresent && !this.shouldNainsFall && !this.showPowerUp) { // show nains
             if (this.nainsFrame >= 0 && this.nainsFrame < 200)
@@ -579,8 +586,9 @@ class Character {
                 context.drawImage(this.nainsImage, Math.floor(this.nainsIdea) * this.width, 4 * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
             else {
                 context.drawImage(this.nainsImage, 1 * this.width, 2 * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height)
-
+                this.pot.draw(context,platform)
             }
+            // more through 8 sprite characters that cycles 600 units
             if (this.nainsIdea > 8) this.nainsIdea = 0
             else this.nainsIdea += 0.3
             this.nainsFrame < 600 ? this.nainsFrame++ : this.nainsFrame = 0
