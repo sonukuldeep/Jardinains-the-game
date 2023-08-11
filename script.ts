@@ -2,6 +2,12 @@ import { Move as controls } from './controls.js'
 import { gameOver as gameOverUI, restartGame, startGame, startBtn } from './ui.js'
 import { SoundEffect, soundsArrayLength } from './soundManager.js'
 
+enum Difficulty {
+    Noob = 20,
+    Sane = 10,
+    Bot = 4,
+}
+
 const canvas = document.querySelector('canvas')!
 const ctx = canvas.getContext('2d')!
 canvas.width = Math.min(document.documentElement.clientWidth, 610)
@@ -16,10 +22,12 @@ let deltaTime = 0
 let lastCollisionTime = 0
 let score = 0
 let lives = 3
-let gunActive = true
+let gunActive = false
 let gameOver = false
 let requestAnimationFrameRef: number
 let lastCollisions: string[] = []
+let difficulty: Difficulty = Difficulty.Sane
+
 
 // add resize event handler here
 
@@ -323,7 +331,7 @@ class Tile {
         this.effectiveWidth = Tile.width - Tile.gap
         this.effectiveHeight = Tile.height - Tile.gap
         this.soundTrack = Math.floor(Math.random() * 3)
-        this.shouldDrawNains = spawn && Math.floor(Math.random() * 4) === 1 ? true : false
+        this.shouldDrawNains = spawn && Math.floor(Math.random() * 2) === 1 ? true : false
         this.lastCollisionTime = 0
         this.tileId = crypto.randomUUID()
     }

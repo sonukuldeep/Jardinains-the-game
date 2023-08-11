@@ -1,6 +1,12 @@
 import { Move as controls } from './controls.js';
 import { gameOver as gameOverUI, startGame, startBtn } from './ui.js';
 import { SoundEffect } from './soundManager.js';
+var Difficulty;
+(function (Difficulty) {
+    Difficulty[Difficulty["Noob"] = 20] = "Noob";
+    Difficulty[Difficulty["Sane"] = 10] = "Sane";
+    Difficulty[Difficulty["Bot"] = 4] = "Bot";
+})(Difficulty || (Difficulty = {}));
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = Math.min(document.documentElement.clientWidth, 610);
@@ -14,10 +20,11 @@ let deltaTime = 0;
 let lastCollisionTime = 0;
 let score = 0;
 let lives = 3;
-let gunActive = true;
+let gunActive = false;
 let gameOver = false;
 let requestAnimationFrameRef;
 let lastCollisions = [];
+let difficulty = Difficulty.Sane;
 const PowerUpEvent = new CustomEvent('powerUpEvent', { detail: { power: { type: '', number: -1 } } });
 class Ball {
     constructor(effect) {
@@ -222,7 +229,7 @@ class Tile {
         this.effectiveWidth = Tile.width - Tile.gap;
         this.effectiveHeight = Tile.height - Tile.gap;
         this.soundTrack = Math.floor(Math.random() * 3);
-        this.shouldDrawNains = spawn && Math.floor(Math.random() * 4) === 1 ? true : false;
+        this.shouldDrawNains = spawn && Math.floor(Math.random() * 2) === 1 ? true : false;
         this.lastCollisionTime = 0;
         this.tileId = crypto.randomUUID();
     }
