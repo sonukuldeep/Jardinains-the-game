@@ -1,5 +1,5 @@
 import { Move as controls } from './controls.js';
-import { gameOver as gameOverUI, restartGame, startGame, startBtn } from './ui.js';
+import { gameOver as gameOverUI, startGame, startBtn } from './ui.js';
 import { SoundEffect } from './soundManager.js';
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
@@ -17,7 +17,7 @@ let lives = 3;
 let gunActive = true;
 let gameOver = false;
 let requestAnimationFrameRef;
-let lastCollisionID;
+let lastCollisions = [];
 const PowerUpEvent = new CustomEvent('powerUpEvent', { detail: { power: { type: '', number: -1 } } });
 class Ball {
     constructor(effect) {
@@ -30,6 +30,7 @@ class Ball {
         this.friction = 0.98;
         this.fillColorFactor = 360 / canvas.width;
         this.rocketMode = false;
+        this.ballId = crypto.randomUUID();
     }
     draw(context) {
         context.fillStyle = `hsl(60, 100%, 50%)`;
@@ -38,8 +39,8 @@ class Ball {
         context.fill();
     }
     update(platform) {
-        const circle = { x: this.x, y: this.y, radius: this.radius };
-        const rectangle = { x: platform.x, y: platform.y, width: platform.width, height: platform.height };
+        const circle = { x: this.x, y: this.y, radius: this.radius, id: this.ballId };
+        const rectangle = { x: platform.x, y: platform.y, width: platform.width, height: platform.height, id: platform.platformId };
         if (detectCollision(circle, rectangle)) {
             this.vy *= -1;
             const ratio = (this.x - platform.x) / (platform.width);
@@ -64,15 +65,15 @@ class Ball {
         if ((this.x + this.radius) > this.effect.width || (this.x - this.radius) < 0) {
             this.x = this.x;
             this.vx *= -1;
+            lastCollisions = ['walls'];
         }
         if ((this.y - this.radius) < 0) {
             this.y = this.y;
             this.vy *= -1;
+            lastCollisions = ['top'];
         }
         if ((this.y + this.radius) > this.effect.height + 18) {
-            gameOverUI.classList.add('activate');
-            gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef); }, 200);
-            gameOver = true;
+            callGameOver();
         }
         this.x += this.vx;
         this.y += this.vy;
@@ -107,6 +108,7 @@ class Effect {
         });
     }
     handleParticles(context) {
+        this.platform.draw(context);
         this.tiles.forEach((tile, index) => {
             tile.draw(context, this.platform);
             const nain = this.characters[index];
@@ -116,8 +118,8 @@ class Effect {
                     nain.setUp();
                 nain.drawNains(context, this.platform);
                 if (nain.nainsIsPresent) {
-                    const rectangle1 = { x: nain.x, y: nain.y, width: nain.width, height: nain.height - nain.verticalShift };
-                    const rectangle2 = { x: this.platform.x, y: this.platform.y, width: this.platform.width, height: this.platform.height };
+                    const rectangle1 = { x: nain.x, y: nain.y, width: nain.width, height: nain.height - nain.verticalShift, id: nain.nainsId };
+                    const rectangle2 = { x: this.platform.x, y: this.platform.y, width: this.platform.width, height: this.platform.height, id: this.platform.platformId };
                     if (nain.bounceNaine(rectangle1, rectangle2)) {
                         this.platform.shake.shake = 1;
                     }
@@ -127,22 +129,9 @@ class Effect {
         });
         this.ball.draw(context);
         this.ball.update(this.platform);
-        this.platform.draw(context);
         this.statsBoard.draw(context);
-        if (this.tiles.length === 0) {
-            Array.from(document.querySelectorAll('.score .score-count')).forEach(ui => ui.innerHTML = score.toString());
-            restartGame.classList.add('activate');
-            gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef); }, 200);
-            gameOver = true;
-            this.characters.forEach(nains => {
-                if (nains.y > canvas.height / 2) {
-                    console.log('nains');
-                }
-            });
-        }
-    }
-    cleanUp() {
-        this.tiles = this.tiles.filter(tile => !tile.deactivate);
+        if (this.tiles.filter(tile => !tile.deactivate).length === 0)
+            callGameOver();
     }
 }
 class Platform {
@@ -161,6 +150,7 @@ class Platform {
         this.shake = new ShakeOnHit();
         this.bullet = [];
         this.bulletOffset = 10;
+        this.platformId = crypto.randomUUID();
     }
     draw(context) {
         if (this.shake.shake < this.platformHitPanelty && this.x - 10 * controls.x > 0 && this.x + this.width - 10 * controls.x < this.canvasWidth)
@@ -234,14 +224,15 @@ class Tile {
         this.soundTrack = Math.floor(Math.random() * 3);
         this.shouldDrawNains = spawn && Math.floor(Math.random() * 4) === 1 ? true : false;
         this.lastCollisionTime = 0;
+        this.tileId = crypto.randomUUID();
     }
     draw(context, platform) {
         context.fillStyle = this.color;
         !this.deactivate && context.fillRect(this.x, this.y, this.effectiveWidth, this.effectiveHeight);
     }
     deativateTile(ball, nain) {
-        const circle = { x: ball.x, y: ball.y, radius: ball.radius };
-        const rectangle = { x: this.x, y: this.y, width: this.effectiveWidth, height: this.effectiveHeight };
+        const circle = { x: ball.x, y: ball.y, radius: ball.radius, id: ball.ballId };
+        const rectangle = { x: this.x, y: this.y, width: this.effectiveWidth, height: this.effectiveHeight, id: this.tileId };
         if (!this.deactivate && detectCollision(circle, rectangle)) {
             this.deactivate = true;
             if (!ball.rocketMode) {
@@ -291,8 +282,8 @@ class Pot {
         this.potNumber = Math.floor(Math.random() * (13 - 9)) + 9;
         this.x = x;
         this.y = y;
-        this.potHeight = 24;
-        this.potWidth = 24;
+        this.potHeight = 24 + 1;
+        this.potWidth = 24 + 1;
         this.angle = 0;
         this.potx = 0;
         this.poty = 0;
@@ -307,39 +298,54 @@ class Pot {
         this.explosionSound = Math.floor(Math.random() * (8 - 5)) + 5;
         this.verticalShift = 25;
         this.spriteSheetRowNumber = 4;
+        this.potId = crypto.randomUUID();
+        this.collideX = 0;
+        this.collideY = 0;
     }
-    explode(context) {
-        if (!this.potCollided)
-            return;
-        context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.potx - this.explositionWidth * 0.5, this.poty - this.explositionHeight * 0.6, this.explositionWidth, this.explositionHeight);
-        this.explodePotKeyFrame < 44 ? this.explodePotKeyFrame += 1 : '';
+    reset(platform) {
+        this.angle = Math.atan2(platform.y - (this.y + this.verticalShift + 30), platform.x + platform.width / 2 - this.x);
+        this.potx = this.x;
+        this.poty = this.y;
+        this.potV = 10;
+        this.collideX = 0;
+        this.collideY = 0;
+        this.potCollided = false;
+        this.explodePotKeyFrame = 0;
     }
-    draw(context, platform) {
-        context.drawImage(this.pot, 0, 0, this.potWidth, this.potHeight, this.x, this.y, this.potWidth, this.potHeight);
-        if (!this.potIsActive)
-            return;
-        const rectangle1 = { x: this.potx, y: this.poty - this.verticalShift * this.potHeight, width: this.potWidth, height: this.potHeight };
-        const rectangle2 = { x: platform.x, y: platform.y, width: platform.width, height: platform.height };
-        this.potCollided = detectRectangleCollision(rectangle1, rectangle2);
-        if (!this.potCollided) {
+    draw(context, platform, status) {
+        if (status === 'aim') {
+            context.drawImage(this.pot, this.potNumber * this.potWidth, this.spriteSheetRowNumber * this.potHeight, this.potWidth, this.potHeight, this.x, this.y - this.verticalShift - 20, this.potWidth, this.potHeight);
+            this.reset(platform);
+        }
+        else if (status === 'fall') {
+            this.poty += this.potV * Math.sin(90);
+            this.potV *= 1.01;
+            context.drawImage(this.pot, this.potNumber * this.potWidth, this.spriteSheetRowNumber * this.potHeight, this.potWidth, this.potHeight, this.potx, this.poty - this.verticalShift - 20, this.potWidth, this.potHeight);
+        }
+        else if (status === 'thrown') {
             this.potx += this.potV * Math.cos(this.angle);
             this.poty += this.potV * Math.sin(this.angle);
             this.potV *= 1.01;
-            context.drawImage(this.pot, this.potNumber * this.potWidth, this.spriteSheetRowNumber * this.potHeight, this.potWidth, this.potHeight, this.x, this.y - this.verticalShift * this.potHeight, this.potWidth, this.potHeight);
-        }
-        else {
-            if (!this.potIsActive) {
-                platform.shake.shake = 1;
-                SoundEffect(this.explosionSound);
-                lives--;
-                if (lives === 0) {
-                    Array.from(document.querySelectorAll('.score .score-count')).forEach(ui => ui.innerHTML = score.toString());
-                    gameOverUI.classList.add('activate');
-                    gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef); }, 800);
-                    gameOver = true;
+            const rectangle1 = { x: this.potx, y: this.poty, width: this.potWidth, height: this.potHeight, id: this.potId };
+            const rectangle2 = { x: platform.x, y: platform.y, width: platform.width, height: platform.height, id: platform.platformId };
+            if (!this.potCollided) {
+                this.potCollided = detectRectangleCollision(rectangle1, rectangle2);
+                context.drawImage(this.pot, this.potNumber * this.potWidth, this.spriteSheetRowNumber * this.potHeight, this.potWidth, this.potHeight, this.potx, this.poty, this.potWidth, this.potHeight);
+                this.collideX = this.potx - this.explositionWidth / 2 + 10;
+                this.collideY = this.poty - this.explositionHeight / 2;
+                if (this.potCollided) {
+                    platform.shake.shake = 1;
+                    SoundEffect(this.explosionSound);
+                    lives--;
+                    if (lives === 0) {
+                        callGameOver();
+                    }
                 }
             }
-            this.potIsActive = true;
+            else {
+                context.drawImage(this.explosionImage, this.explodePotKeyFrame * this.explositionWidth, 0, this.explositionWidth, this.explositionHeight, this.collideX, this.collideY, this.explositionWidth, this.explositionHeight);
+                this.explodePotKeyFrame++;
+            }
         }
     }
 }
@@ -373,10 +379,12 @@ class Character {
         this.nainsIsPresent = false;
         this.shouldNainsFall = false;
         this.showPowerUp = false;
-        this.id = crypto.randomUUID();
+        this.nainsId = crypto.randomUUID();
         this.runOnce = false;
         this.nainsFrame = 0;
         this.pot = new Pot(this.x, this.y);
+        this.potLoaded = false;
+        this.potStatus = 'idle';
     }
     setUp() {
         if (lastTime - this.time > 0 && !this.runOnce) {
@@ -395,13 +403,16 @@ class Character {
             }
         }
         if (this.nainsIsPresent && !this.shouldNainsFall && !this.showPowerUp) {
-            if (this.nainsFrame >= 0 && this.nainsFrame < 200)
+            if (this.nainsFrame >= 0 && this.nainsFrame < 200) {
                 context.drawImage(this.nainsImage, Math.floor(this.nainsIdea) * this.width, 0, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            }
             else if (this.nainsFrame >= 200 && this.nainsFrame <= 400)
                 context.drawImage(this.nainsImage, Math.floor(this.nainsIdea) * this.width, 4 * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
-            else {
+            else if (this.nainsFrame > 400 && this.nainsFrame <= 600) {
                 context.drawImage(this.nainsImage, 1 * this.width, 2 * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
-                this.pot.draw(context, platform);
+                this.potStatus = 'aim';
+                if (this.nainsFrame === 600)
+                    this.potStatus = 'thrown';
             }
             if (this.nainsIdea > 8)
                 this.nainsIdea = 0;
@@ -411,6 +422,8 @@ class Character {
         }
         else if (this.nainsIsPresent && this.shouldNainsFall && !this.showPowerUp) {
             context.drawImage(this.nainsImage, Math.floor(this.nainsFall) * this.width, 6 * this.height, this.width, this.height, this.x, this.y - this.verticalShift, this.width, this.height);
+            if (this.nainsFrame > 400 && this.nainsFrame <= 600)
+                this.potStatus = 'fall';
             if (this.nainsFall > 14)
                 this.nainsFall = 0;
             else
@@ -419,6 +432,7 @@ class Character {
         else if (this.nainsIsPresent && !this.shouldNainsFall && this.showPowerUp) {
             context.drawImage(this.powerUpImage, this.powerUp * this.powerUpWidth, 0, this.powerUpWidth, this.powerUpHeight, this.x - this.powerUpWidth / 4, this.y - this.verticalShift, this.powerUpWidth, this.powerUpHeight);
         }
+        this.pot.draw(context, platform, this.potStatus);
         if (this.vy - this.force > 0) {
             this.vy *= 1.02;
         }
@@ -482,20 +496,30 @@ startBtn.addEventListener('click', (e) => {
     animation(0);
 });
 function detectCollision(circle, rectangle) {
+    const id = circle.id + '-' + rectangle.id;
+    if (lastCollisions.includes(id))
+        return false;
     if (lastTime - lastCollisionTime < 20)
         return false;
     if (circle.x + circle.radius > rectangle.x && circle.x - circle.radius < rectangle.x + rectangle.width && circle.y + circle.radius > rectangle.y && circle.y - circle.radius < rectangle.y + rectangle.height) {
         lastCollisionTime = lastTime;
+        console.log(lastCollisions.includes(id), id);
+        lastCollisions = [id];
         return true;
     }
     else
         return false;
 }
 function detectRectangleCollision(rectangle1, rectangle2) {
+    const id = rectangle1.id + '-' + rectangle2.id;
+    if (lastCollisions.includes(id))
+        return false;
     if (lastTime - lastCollisionTime < 20)
         return false;
     if (rectangle1.x + rectangle1.width > rectangle2.x && rectangle1.x < rectangle2.x + rectangle2.width && rectangle1.y + rectangle1.height > rectangle2.y && rectangle1.y < rectangle2.y + rectangle2.height) {
         lastCollisionTime = lastTime;
+        console.log(lastCollisions.includes(id), id);
+        lastCollisions = [id];
         return true;
     }
     else
@@ -504,6 +528,12 @@ function detectRectangleCollision(rectangle1, rectangle2) {
 function powerUpManager(powerUp) {
     PowerUpEvent.detail.power.number = powerUp;
     document.dispatchEvent(PowerUpEvent);
+}
+function callGameOver() {
+    Array.from(document.querySelectorAll('.score .score-count')).forEach(ui => ui.innerHTML = score.toString());
+    gameOverUI.classList.add('activate');
+    gameOver === false && setTimeout(() => { cancelAnimationFrame(requestAnimationFrameRef); }, 200);
+    gameOver = true;
 }
 document.addEventListener('powerUpEvent', ({ detail }) => {
     console.log('custom event fired', detail);
