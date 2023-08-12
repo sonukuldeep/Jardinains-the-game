@@ -50,20 +50,18 @@ window.addEventListener('keyup', (e) => {
 });
 function beginSliding(e) {
     e.preventDefault();
-    startX = e.touches[0].clientX;
-}
-function moveSlider(e) {
-    e.preventDefault();
-    endX = e.touches[0].clientX;
-    Move.x = (startX - endX) > 0 ? +1 : -1;
+    touchPoint = e.touches[0].clientX;
+    if (touchPoint > canvasCenter)
+        Move.x = -1;
+    else
+        Move.x = 1;
 }
 function stopSliding(e) {
     e.preventDefault();
     Move.x = 0;
 }
-const slider = document.querySelector("main");
-let startX = 0;
-let endX = 0;
-slider.ontouchstart = beginSliding;
-slider.ontouchend = stopSliding;
-slider.ontouchmove = moveSlider;
+const canvas = document.querySelector("main");
+const canvasCenter = canvas.clientWidth / 2;
+let touchPoint = 0;
+canvas.ontouchstart = beginSliding;
+canvas.ontouchend = stopSliding;
