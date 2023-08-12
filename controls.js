@@ -48,3 +48,22 @@ window.addEventListener('keyup', (e) => {
             console.log(e.key);
     }
 });
+function beginSliding(e) {
+    e.preventDefault();
+    startX = e.clientX;
+}
+function moveSlider(e) {
+    e.preventDefault();
+    endX = e.clientX;
+    Move.x = (startX - endX) > 0 ? +1 : -1;
+}
+function stopSliding(e) {
+    e.preventDefault();
+    Move.x = 0;
+}
+const slider = document.querySelector("main");
+let startX = 0;
+let endX = 0;
+slider.onpointerdown = beginSliding;
+slider.onpointerup = stopSliding;
+slider.onpointermove = moveSlider;
