@@ -50,11 +50,11 @@ window.addEventListener('keyup', (e) => {
 });
 function beginSliding(e) {
     e.preventDefault();
-    startX = e.clientX;
+    startX = e.touches[0].clientX;
 }
 function moveSlider(e) {
     e.preventDefault();
-    endX = e.clientX;
+    endX = e.touches[0].clientX;
     Move.x = (startX - endX) > 0 ? +1 : -1;
 }
 function stopSliding(e) {
@@ -64,6 +64,6 @@ function stopSliding(e) {
 const slider = document.querySelector("main");
 let startX = 0;
 let endX = 0;
-slider.onpointerdown = beginSliding;
-slider.onpointerup = stopSliding;
-slider.onpointermove = moveSlider;
+slider.ontouchstart = beginSliding;
+slider.ontouchend = stopSliding;
+slider.ontouchmove = moveSlider;

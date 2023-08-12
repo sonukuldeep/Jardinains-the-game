@@ -55,17 +55,17 @@ window.addEventListener('keyup', (e) => {
 
 
 // mouse controls
-function beginSliding(e: PointerEvent) {
+function beginSliding(e: TouchEvent) {
     e.preventDefault()
-    startX = e.clientX
+    startX = e.touches[0].clientX
 }
-function moveSlider(e: PointerEvent) {
+function moveSlider(e: TouchEvent) {
     e.preventDefault()
-    endX = e.clientX
+    endX = e.touches[0].clientX
     Move.x = (startX - endX) > 0 ? +1 : -1
 }
 
-function stopSliding(e: PointerEvent) {
+function stopSliding(e: TouchEvent) {
     e.preventDefault()
     Move.x = 0
 }
@@ -73,6 +73,6 @@ function stopSliding(e: PointerEvent) {
 const slider = document.querySelector("main")!;
 let startX = 0
 let endX = 0
-slider.onpointerdown = beginSliding;
-slider.onpointerup = stopSliding;
-slider.onpointermove = moveSlider;
+slider.ontouchstart = beginSliding;
+slider.ontouchend = stopSliding;
+slider.ontouchmove = moveSlider;
